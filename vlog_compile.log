@@ -1,0 +1,11 @@
+QuestaSim-64 vlog 2020.1 Compiler 2020.01 Jan 28 2020
+Start time: 14:05:58 on Oct 16,2025
+vlog -sv -work work alu.sv control_unit.sv cpu.sv hexdriver.sv instruction_decoder.sv regfile.sv simtop.sv top.sv 
+-- Compiling module alu
+-- Compiling module control_unit
+-- Compiling module cpu
+** Error: (vlog-13069) hexdriver.sv(1): near "[": syntax error, unexpected '[', expecting class.
+** Error: (vlog-13069) hexdriver.sv(1): near "p": syntax error, unexpected end of source code.
+** Error: hexdriver.sv(1): (vlog-13205) Syntax error found in the scope following 'p'. Is there a missing '::'?
+End time: 14:05:58 on Oct 16,2025, Elapsed time: 0:00:00
+Errors: 3, Warnings: 0
