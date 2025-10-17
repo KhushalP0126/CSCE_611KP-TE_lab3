@@ -1,37 +1,30 @@
-    # bin2dec.asm - binary -> decimal (packed nibbles) for the CSCE611 lab
-    # Reads input from CSR io0 (0xF00), writes packed decimal to CSR io2 (0xF02).
-    # Uses double-dabble (shift-add-3) to convert 32-bit value into 8 decimal digits
-    # packed into 8 nibbles (HEX7..HEX0). No DIV instruction required.
-    #
-    # NOTES:
-    # - If RARS isn't available to supply io0 at run-time, uncomment the LI_INPUT
-    #   block to use a hard-coded test value (useful for simulation).
-    # - If you want more than 8 decimal digits, you'd need to increase the BCD width.
-    # - After writing the output CSR, the program loops forever.
+# bin2dec.asm - binary -> decimal (packed nibbles) for CSCE611 lab
+# Reads input from CSR io0 (0xF00), writes packed decimal to CSR io2 (0xF02).
+# Uses double-dabble (shift-add-3) to convert 32-bit value into 8 decimal digits
+# packed into 8 nibbles (HEX7..HEX0).
+#
+# To test in RARS without CSR support:
+#  - comment out the csrrw line below and uncomment one of the li x10, ... lines.
 
-    .section .text
+    .text
     .globl _start
 _start:
     # ---------------------------
-    # Read input from CSR io0
+    # Read input from CSR io0 (preferred)
     # ---------------------------
-    # Try runtime read:
-    csrrw   x10, 0xf00, x0     # a0 <- io0 (CSR 0xF00), don't write anything
+    csrrw   x10, 0xf00, x0     # a0 <- io0 (CSR 0xF00) ; no write
 
-    # If you don't have RARS or can't read io0 during early testing,
-    # comment the csrrw above and uncomment one of these hard-coded tests:
-    # li  x10, 0x000001EF      # test: 0x1EF = 495 decimal
+    # If RARS can't supply io0 during testing, replace the csrrw above with one of:
+    # li  x10, 0x000001EF      # test: 0x1EF -> 495 decimal
     # li  x10, 0x0000002A      # test: 42 decimal
     # li  x10, 12345678        # test: 12,345,678 (fits in 8 digits)
 
-    # a0 = input value to convert
-    mv      t0, x10           # t0 holds the input value to shift (we'll shift bits out)
+    # a0 = input value to convert (we'll put it in t0)
+    mv      t0, x10           # t0 holds the input value to shift (MSB first)
 
     # ---------------------------
-    # Initialize BCD digits d7..d0 = 0
-    # We'll hold them in registers s0..s7 (x8..x15)
-    # s0 -> least significant decimal digit (units)
-    # s7 -> most significant decimal digit (10^7)
+    # Initialize BCD digits d7..d0 = 0  (use s0..s7: x8..x15)
+    # s0 = LSD (units), s7 = MSD (10^7)
     # ---------------------------
     li      s0, 0
     li      s1, 0
@@ -42,11 +35,10 @@ _start:
     li      s6, 0
     li      s7, 0
 
-    li      t1, 32            # bit loop counter (i = 32 down to 1)
+    li      t1, 32            # bit loop counter
 
 bitloop:
     # For each BCD digit: if digit >= 5 then add 3
-    # We'll use sltiu to test (digit < 5) ; if result==0 then digit >=5
     li      t2, 5
     sltiu   t3, s0, 5
     bne     t3, x0, skip_add0
@@ -81,25 +73,19 @@ skip_add6:
     addi    s7, s7, 3
 skip_add7:
 
-    # Now shift left the whole BCD array by 1 bit, inserting the next MSB of t0
-    # We shift from most significant digit down to least, carrying bits between them.
+    # Extract top bit of t0 (bit 31), then shift t0 left by 1
+    srli    t4, t0, 31        # t4 = (t0 >> 31) & 1  - the bit to inject
+    slli    t0, t0, 1         # shift t0 left for next iteration
 
-    # Extract the top bit of t0 (bit 31 of current t0)
-    slli    t4, t0, 0         # t4 = t0 (copy)
-    srli    t4, t4, 31        # t4 = (t0 >> 31) & 1  --- this is the bit to inject
-    # shift t0 left by 1 for next iteration
-    slli    t0, t0, 1
+    # Shift BCD digits left by 1 with carry propagation (MSD..LSD)
+    # We'll reuse t4 as carry_in; t5,t6 as scratch; t3 will be used later for packing.
 
-    # We'll perform digit shifts with carries.
-    # For each digit: new_digit = ((digit << 1) & 0xF) | carry_in
-    # carry_out = (digit >> 3) & 1  (since digit is 4-bit, msb is bit3 before shift)
-
-    # Digit s7 (MSD)
-    slli    t5, s7, 1         # t5 = s7 << 1
-    srli    t6, s7, 3         # t6 = old s7 bit3 -> carry_out
-    andi    t5, t5, 0xF       # mask to 4 bits (not strictly necessary but safe)
-    or      s7, t5, t4        # s7 = shifted | carry_in
-    mv      t4, t6            # new carry_in = carry_out for next digit
+    # s7 (MSD)
+    slli    t5, s7, 1
+    srli    t6, s7, 3
+    andi    t5, t5, 0xF
+    or      s7, t5, t4
+    mv      t4, t6
 
     # s6
     slli    t5, s6, 1
@@ -148,7 +134,7 @@ skip_add7:
     srli    t6, s0, 3
     andi    t5, t5, 0xF
     or      s0, t5, t4
-    # t4 (carry out of s0) is discarded
+    # carry out of s0 is ignored
 
     # decrement bit counter
     addi    t1, t1, -1
@@ -157,31 +143,32 @@ skip_add7:
     # ---------------------------
     # Pack BCD digits into 32-bit word:
     # result = (s7<<28) | (s6<<24) | ... | (s0<<0)
+    # We'll use t3 as accumulator (t3 is free now).
     # ---------------------------
-    slli    t7, s7, 28
+    slli    t3, s7, 28
     slli    t6, s6, 24
-    or      t7, t7, t6
+    or      t3, t3, t6
     slli    t6, s5, 20
-    or      t7, t7, t6
+    or      t3, t3, t6
     slli    t6, s4, 16
-    or      t7, t7, t6
+    or      t3, t3, t6
     slli    t6, s3, 12
-    or      t7, t7, t6
+    or      t3, t3, t6
     slli    t6, s2, 8
-    or      t7, t7, t6
+    or      t3, t3, t6
     slli    t6, s1, 4
-    or      t7, t7, t6
-    or      t7, t7, s0        # t7 now has packed 8-digit BCD in nibbles
+    or      t3, t3, t6
+    or      t3, t3, s0        # t3 now contains packed 8-digit BCD in nibbles
 
     # ---------------------------
     # Write result to CSR io2 (0xF02)
     # csrrw rd, csr, rs1  ; rd <- old CSR, CSR <- rs1
-    # We don't care about the readback, so use x0 as rd.
+    # We don't need the readback, so use x0 as rd.
     # ---------------------------
-    mv      x12, t7
+    mv      x12, t3
     csrrw   x0, 0xf02, x12    # write packed decimal to io2
 
 done_loop:
-    # stay here forever (so output remains visible)
+    # stay here forever so the result remains visible
     j done_loop
 
