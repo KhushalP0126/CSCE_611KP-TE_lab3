@@ -1,174 +1,841 @@
-# bin2dec.asm - binary -> decimal (packed nibbles) for CSCE611 lab
-# Reads input from CSR io0 (0xF00), writes packed decimal to CSR io2 (0xF02).
-# Uses double-dabble (shift-add-3) to convert 32-bit value into 8 decimal digits
-# packed into 8 nibbles (HEX7..HEX0).
-#
-# To test in RARS without CSR support:
-#  - comment out the csrrw line below and uncomment one of the li x10, ... lines.
-
     .text
     .globl _start
 _start:
-    # ---------------------------
-    # Read input from CSR io0 (preferred)
-    # ---------------------------
-    csrrw   x10, 0xf00, x0     # a0 <- io0 (CSR 0xF00) ; no write
+    # Read 8-bit binary input from CSR io0
+    csrrw   t0, 0xf00, x0     # binary input (t0)
+    
+    # Clear BCD digits
+    li s0, 0
+    li s1, 0
+    li s2, 0
+    li s3, 0
+    li s4, 0
+    li s5, 0
+    li s6, 0
+    li s7, 0
 
-    # If RARS can't supply io0 during testing, replace the csrrw above with one of:
-    # li  x10, 0x000001EF      # test: 0x1EF -> 495 decimal
-    # li  x10, 0x0000002A      # test: 42 decimal
-    # li  x10, 12345678        # test: 12,345,678 (fits in 8 digits)
 
-    # a0 = input value to convert (we'll put it in t0)
-    mv      t0, x10           # t0 holds the input value to shift (MSB first)
+    ###########################################
+    # ==== ITERATION 1 ====
+    ###########################################
+    slti    t2, s7, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s7, s7, t4
 
-    # ---------------------------
-    # Initialize BCD digits d7..d0 = 0  (use s0..s7: x8..x15)
-    # s0 = LSD (units), s7 = MSD (10^7)
-    # ---------------------------
-    li      s0, 0
-    li      s1, 0
-    li      s2, 0
-    li      s3, 0
-    li      s4, 0
-    li      s5, 0
-    li      s6, 0
-    li      s7, 0
+    slti    t2, s6, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s6, s6, t4
 
-    li      t1, 32            # bit loop counter
+    slti    t2, s5, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s5, s5, t4
 
-bitloop:
-    # For each BCD digit: if digit >= 5 then add 3
-    li      t2, 5
-    sltiu   t3, s0, 5
-    bne     t3, x0, skip_add0
-    addi    s0, s0, 3
-skip_add0:
-    sltiu   t3, s1, 5
-    bne     t3, x0, skip_add1
-    addi    s1, s1, 3
-skip_add1:
-    sltiu   t3, s2, 5
-    bne     t3, x0, skip_add2
-    addi    s2, s2, 3
-skip_add2:
-    sltiu   t3, s3, 5
-    bne     t3, x0, skip_add3
-    addi    s3, s3, 3
-skip_add3:
-    sltiu   t3, s4, 5
-    bne     t3, x0, skip_add4
-    addi    s4, s4, 3
-skip_add4:
-    sltiu   t3, s5, 5
-    bne     t3, x0, skip_add5
-    addi    s5, s5, 3
-skip_add5:
-    sltiu   t3, s6, 5
-    bne     t3, x0, skip_add6
-    addi    s6, s6, 3
-skip_add6:
-    sltiu   t3, s7, 5
-    bne     t3, x0, skip_add7
-    addi    s7, s7, 3
-skip_add7:
+    slti    t2, s4, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s4, s4, t4
 
-    # Extract top bit of t0 (bit 31), then shift t0 left by 1
-    srli    t4, t0, 31        # t4 = (t0 >> 31) & 1  - the bit to inject
-    slli    t0, t0, 1         # shift t0 left for next iteration
+    slti    t2, s3, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s3, s3, t4
 
-    # Shift BCD digits left by 1 with carry propagation (MSD..LSD)
-    # We'll reuse t4 as carry_in; t5,t6 as scratch; t3 will be used later for packing.
+    slti    t2, s2, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s2, s2, t4
 
-    # s7 (MSD)
-    slli    t5, s7, 1
-    srli    t6, s7, 3
-    andi    t5, t5, 0xF
-    or      s7, t5, t4
-    mv      t4, t6
+    slti    t2, s1, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s1, s1, t4
 
-    # s6
-    slli    t5, s6, 1
-    srli    t6, s6, 3
-    andi    t5, t5, 0xF
-    or      s6, t5, t4
-    mv      t4, t6
+    slti    t2, s0, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s0, s0, t4
 
-    # s5
-    slli    t5, s5, 1
-    srli    t6, s5, 3
-    andi    t5, t5, 0xF
-    or      s5, t5, t4
-    mv      t4, t6
+    # Shift binary input and BCD digits
+    srli    t2, t0, 7         # MSB for 8-bit input
+    slli    t0, t0, 1
+    srli    t3, s0, 3
+    slli    s0, s0, 1
+    andi    s0, s0, 0xE
+    or      s0, s0, t2
+    mv      t3, t3
 
-    # s4
-    slli    t5, s4, 1
-    srli    t6, s4, 3
-    andi    t5, t5, 0xF
-    or      s4, t5, t4
-    mv      t4, t6
+    srli    t2, s1, 3
+    slli    s1, s1, 1
+    andi    s1, s1, 0xE
+    or      s1, s1, t3
+    mv      t3, t2
 
-    # s3
-    slli    t5, s3, 1
-    srli    t6, s3, 3
-    andi    t5, t5, 0xF
-    or      s3, t5, t4
-    mv      t4, t6
+    srli    t2, s2, 3
+    slli    s2, s2, 1
+    andi    s2, s2, 0xE
+    or      s2, s2, t3
+    mv      t3, t2
 
-    # s2
-    slli    t5, s2, 1
-    srli    t6, s2, 3
-    andi    t5, t5, 0xF
-    or      s2, t5, t4
-    mv      t4, t6
+    srli    t2, s3, 3
+    slli    s3, s3, 1
+    andi    s3, s3, 0xE
+    or      s3, s3, t3
+    mv      t3, t2
 
-    # s1
-    slli    t5, s1, 1
-    srli    t6, s1, 3
-    andi    t5, t5, 0xF
-    or      s1, t5, t4
-    mv      t4, t6
+    srli    t2, s4, 3
+    slli    s4, s4, 1
+    andi    s4, s4, 0xE
+    or      s4, s4, t3
+    mv      t3, t2
 
-    # s0 (LSD)
-    slli    t5, s0, 1
-    srli    t6, s0, 3
-    andi    t5, t5, 0xF
-    or      s0, t5, t4
-    # carry out of s0 is ignored
+    srli    t2, s5, 3
+    slli    s5, s5, 1
+    andi    s5, s5, 0xE
+    or      s5, s5, t3
+    mv      t3, t2
 
-    # decrement bit counter
-    addi    t1, t1, -1
-    bnez    t1, bitloop
+    srli    t2, s6, 3
+    slli    s6, s6, 1
+    andi    s6, s6, 0xE
+    or      s6, s6, t3
+    mv      t3, t2
 
-    # ---------------------------
-    # Pack BCD digits into 32-bit word:
-    # result = (s7<<28) | (s6<<24) | ... | (s0<<0)
-    # We'll use t3 as accumulator (t3 is free now).
-    # ---------------------------
-    slli    t3, s7, 28
-    slli    t6, s6, 24
-    or      t3, t3, t6
-    slli    t6, s5, 20
-    or      t3, t3, t6
-    slli    t6, s4, 16
-    or      t3, t3, t6
-    slli    t6, s3, 12
-    or      t3, t3, t6
-    slli    t6, s2, 8
-    or      t3, t3, t6
-    slli    t6, s1, 4
-    or      t3, t3, t6
-    or      t3, t3, s0        # t3 now contains packed 8-digit BCD in nibbles
+    slli    s7, s7, 1
+    andi    s7, s7, 0xE
+    or      s7, s7, t3
 
-    # ---------------------------
-    # Write result to CSR io2 (0xF02)
-    # csrrw rd, csr, rs1  ; rd <- old CSR, CSR <- rs1
-    # We don't need the readback, so use x0 as rd.
-    # ---------------------------
-    mv      x12, t3
-    csrrw   x0, 0xf02, x12    # write packed decimal to io2
+     ###########################################
+    # ==== ITERATION 2 ====
+    ###########################################
+    slti    t2, s7, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s7, s7, t4
 
-done_loop:
-    # stay here forever so the result remains visible
-    j done_loop
+    slti    t2, s6, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s6, s6, t4
+
+    slti    t2, s5, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s5, s5, t4
+
+    slti    t2, s4, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s4, s4, t4
+
+    slti    t2, s3, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s3, s3, t4
+
+    slti    t2, s2, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s2, s2, t4
+
+    slti    t2, s1, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s1, s1, t4
+
+    slti    t2, s0, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s0, s0, t4
+
+    # Shift binary input and BCD digits
+    srli    t2, t0, 7         # MSB for 8-bit input
+    slli    t0, t0, 1
+    srli    t3, s0, 3
+    slli    s0, s0, 1
+    andi    s0, s0, 0xE
+    or      s0, s0, t2
+    mv      t3, t3
+
+    srli    t2, s1, 3
+    slli    s1, s1, 1
+    andi    s1, s1, 0xE
+    or      s1, s1, t3
+    mv      t3, t2
+
+    srli    t2, s2, 3
+    slli    s2, s2, 1
+    andi    s2, s2, 0xE
+    or      s2, s2, t3
+    mv      t3, t2
+
+    srli    t2, s3, 3
+    slli    s3, s3, 1
+    andi    s3, s3, 0xE
+    or      s3, s3, t3
+    mv      t3, t2
+
+    srli    t2, s4, 3
+    slli    s4, s4, 1
+    andi    s4, s4, 0xE
+    or      s4, s4, t3
+    mv      t3, t2
+
+    srli    t2, s5, 3
+    slli    s5, s5, 1
+    andi    s5, s5, 0xE
+    or      s5, s5, t3
+    mv      t3, t2
+
+    srli    t2, s6, 3
+    slli    s6, s6, 1
+    andi    s6, s6, 0xE
+    or      s6, s6, t3
+    mv      t3, t2
+
+    slli    s7, s7, 1
+    andi    s7, s7, 0xE
+    or      s7, s7, t3
+
+    ###########################################
+    # ==== ITERATION 3 ====
+    ###########################################
+    slti    t2, s7, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s7, s7, t4
+
+    slti    t2, s6, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s6, s6, t4
+
+    slti    t2, s5, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s5, s5, t4
+
+    slti    t2, s4, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s4, s4, t4
+
+    slti    t2, s3, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s3, s3, t4
+
+    slti    t2, s2, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s2, s2, t4
+
+    slti    t2, s1, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s1, s1, t4
+
+    slti    t2, s0, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s0, s0, t4
+
+    # Shift binary input and BCD digits
+    srli    t2, t0, 7         # MSB for 8-bit input
+    slli    t0, t0, 1
+    srli    t3, s0, 3
+    slli    s0, s0, 1
+    andi    s0, s0, 0xE
+    or      s0, s0, t2
+    mv      t3, t3
+
+    srli    t2, s1, 3
+    slli    s1, s1, 1
+    andi    s1, s1, 0xE
+    or      s1, s1, t3
+    mv      t3, t2
+
+    srli    t2, s2, 3
+    slli    s2, s2, 1
+    andi    s2, s2, 0xE
+    or      s2, s2, t3
+    mv      t3, t2
+
+    srli    t2, s3, 3
+    slli    s3, s3, 1
+    andi    s3, s3, 0xE
+    or      s3, s3, t3
+    mv      t3, t2
+
+    srli    t2, s4, 3
+    slli    s4, s4, 1
+    andi    s4, s4, 0xE
+    or      s4, s4, t3
+    mv      t3, t2
+
+    srli    t2, s5, 3
+    slli    s5, s5, 1
+    andi    s5, s5, 0xE
+    or      s5, s5, t3
+    mv      t3, t2
+
+    srli    t2, s6, 3
+    slli    s6, s6, 1
+    andi    s6, s6, 0xE
+    or      s6, s6, t3
+    mv      t3, t2
+
+    slli    s7, s7, 1
+    andi    s7, s7, 0xE
+    or      s7, s7, t3
+
+    ###########################################
+    # ==== ITERATION 4 ====
+    ###########################################
+    slti    t2, s7, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s7, s7, t4
+
+    slti    t2, s6, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s6, s6, t4
+
+    slti    t2, s5, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s5, s5, t4
+
+    slti    t2, s4, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s4, s4, t4
+
+    slti    t2, s3, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s3, s3, t4
+
+    slti    t2, s2, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s2, s2, t4
+
+    slti    t2, s1, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s1, s1, t4
+
+    slti    t2, s0, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s0, s0, t4
+
+    # Shift binary input and BCD digits
+    srli    t2, t0, 7         # MSB for 8-bit input
+    slli    t0, t0, 1
+    srli    t3, s0, 3
+    slli    s0, s0, 1
+    andi    s0, s0, 0xE
+    or      s0, s0, t2
+    mv      t3, t3
+
+    srli    t2, s1, 3
+    slli    s1, s1, 1
+    andi    s1, s1, 0xE
+    or      s1, s1, t3
+    mv      t3, t2
+
+    srli    t2, s2, 3
+    slli    s2, s2, 1
+    andi    s2, s2, 0xE
+    or      s2, s2, t3
+    mv      t3, t2
+
+    srli    t2, s3, 3
+    slli    s3, s3, 1
+    andi    s3, s3, 0xE
+    or      s3, s3, t3
+    mv      t3, t2
+
+    srli    t2, s4, 3
+    slli    s4, s4, 1
+    andi    s4, s4, 0xE
+    or      s4, s4, t3
+    mv      t3, t2
+
+    srli    t2, s5, 3
+    slli    s5, s5, 1
+    andi    s5, s5, 0xE
+    or      s5, s5, t3
+    mv      t3, t2
+
+    srli    t2, s6, 3
+    slli    s6, s6, 1
+    andi    s6, s6, 0xE
+    or      s6, s6, t3
+    mv      t3, t2
+
+    slli    s7, s7, 1
+    andi    s7, s7, 0xE
+    or      s7, s7, t3
+
+    ###########################################
+    # ==== ITERATION 5 ====
+    ###########################################
+    slti    t2, s7, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s7, s7, t4
+
+    slti    t2, s6, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s6, s6, t4
+
+    slti    t2, s5, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s5, s5, t4
+
+    slti    t2, s4, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s4, s4, t4
+
+    slti    t2, s3, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s3, s3, t4
+
+    slti    t2, s2, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s2, s2, t4
+
+    slti    t2, s1, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s1, s1, t4
+
+    slti    t2, s0, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s0, s0, t4
+
+    # Shift binary input and BCD digits
+    srli    t2, t0, 7         # MSB for 8-bit input
+    slli    t0, t0, 1
+    srli    t3, s0, 3
+    slli    s0, s0, 1
+    andi    s0, s0, 0xE
+    or      s0, s0, t2
+    mv      t3, t3
+
+    srli    t2, s1, 3
+    slli    s1, s1, 1
+    andi    s1, s1, 0xE
+    or      s1, s1, t3
+    mv      t3, t2
+
+    srli    t2, s2, 3
+    slli    s2, s2, 1
+    andi    s2, s2, 0xE
+    or      s2, s2, t3
+    mv      t3, t2
+
+    srli    t2, s3, 3
+    slli    s3, s3, 1
+    andi    s3, s3, 0xE
+    or      s3, s3, t3
+    mv      t3, t2
+
+    srli    t2, s4, 3
+    slli    s4, s4, 1
+    andi    s4, s4, 0xE
+    or      s4, s4, t3
+    mv      t3, t2
+
+    srli    t2, s5, 3
+    slli    s5, s5, 1
+    andi    s5, s5, 0xE
+    or      s5, s5, t3
+    mv      t3, t2
+
+    srli    t2, s6, 3
+    slli    s6, s6, 1
+    andi    s6, s6, 0xE
+    or      s6, s6, t3
+    mv      t3, t2
+
+    slli    s7, s7, 1
+    andi    s7, s7, 0xE
+    or      s7, s7, t3
+
+    ###########################################
+    # ==== ITERATION 6 ====
+    ###########################################
+    slti    t2, s7, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s7, s7, t4
+
+    slti    t2, s6, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s6, s6, t4
+
+    slti    t2, s5, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s5, s5, t4
+
+    slti    t2, s4, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s4, s4, t4
+
+    slti    t2, s3, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s3, s3, t4
+
+    slti    t2, s2, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s2, s2, t4
+
+    slti    t2, s1, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s1, s1, t4
+
+    slti    t2, s0, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s0, s0, t4
+
+    # Shift binary input and BCD digits
+    srli    t2, t0, 7         # MSB for 8-bit input
+    slli    t0, t0, 1
+    srli    t3, s0, 3
+    slli    s0, s0, 1
+    andi    s0, s0, 0xE
+    or      s0, s0, t2
+    mv      t3, t3
+
+    srli    t2, s1, 3
+    slli    s1, s1, 1
+    andi    s1, s1, 0xE
+    or      s1, s1, t3
+    mv      t3, t2
+
+    srli    t2, s2, 3
+    slli    s2, s2, 1
+    andi    s2, s2, 0xE
+    or      s2, s2, t3
+    mv      t3, t2
+
+    srli    t2, s3, 3
+    slli    s3, s3, 1
+    andi    s3, s3, 0xE
+    or      s3, s3, t3
+    mv      t3, t2
+
+    srli    t2, s4, 3
+    slli    s4, s4, 1
+    andi    s4, s4, 0xE
+    or      s4, s4, t3
+    mv      t3, t2
+
+    srli    t2, s5, 3
+    slli    s5, s5, 1
+    andi    s5, s5, 0xE
+    or      s5, s5, t3
+    mv      t3, t2
+
+    srli    t2, s6, 3
+    slli    s6, s6, 1
+    andi    s6, s6, 0xE
+    or      s6, s6, t3
+    mv      t3, t2
+
+    slli    s7, s7, 1
+    andi    s7, s7, 0xE
+    or      s7, s7, t3
+
+    ###########################################
+    # ==== ITERATION 7 ====
+    ###########################################
+    slti    t2, s7, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s7, s7, t4
+
+    slti    t2, s6, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s6, s6, t4
+
+    slti    t2, s5, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s5, s5, t4
+
+    slti    t2, s4, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s4, s4, t4
+
+    slti    t2, s3, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s3, s3, t4
+
+    slti    t2, s2, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s2, s2, t4
+
+    slti    t2, s1, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s1, s1, t4
+
+    slti    t2, s0, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s0, s0, t4
+
+    # Shift binary input and BCD digits
+    srli    t2, t0, 7         # MSB for 8-bit input
+    slli    t0, t0, 1
+    srli    t3, s0, 3
+    slli    s0, s0, 1
+    andi    s0, s0, 0xE
+    or      s0, s0, t2
+    mv      t3, t3
+
+    srli    t2, s1, 3
+    slli    s1, s1, 1
+    andi    s1, s1, 0xE
+    or      s1, s1, t3
+    mv      t3, t2
+
+    srli    t2, s2, 3
+    slli    s2, s2, 1
+    andi    s2, s2, 0xE
+    or      s2, s2, t3
+    mv      t3, t2
+
+    srli    t2, s3, 3
+    slli    s3, s3, 1
+    andi    s3, s3, 0xE
+    or      s3, s3, t3
+    mv      t3, t2
+
+    srli    t2, s4, 3
+    slli    s4, s4, 1
+    andi    s4, s4, 0xE
+    or      s4, s4, t3
+    mv      t3, t2
+
+    srli    t2, s5, 3
+    slli    s5, s5, 1
+    andi    s5, s5, 0xE
+    or      s5, s5, t3
+    mv      t3, t2
+
+    srli    t2, s6, 3
+    slli    s6, s6, 1
+    andi    s6, s6, 0xE
+    or      s6, s6, t3
+    mv      t3, t2
+
+    slli    s7, s7, 1
+    andi    s7, s7, 0xE
+    or      s7, s7, t3
+
+    ###########################################
+    # ==== ITERATION 8 ====
+    ###########################################
+    slti    t2, s7, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s7, s7, t4
+
+    slti    t2, s6, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s6, s6, t4
+
+    slti    t2, s5, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s5, s5, t4
+
+    slti    t2, s4, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s4, s4, t4
+
+    slti    t2, s3, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s3, s3, t4
+
+    slti    t2, s2, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s2, s2, t4
+
+    slti    t2, s1, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s1, s1, t4
+
+    slti    t2, s0, 5
+    xori    t2, t2, 1
+    slli    t4, t2, 1
+    add     t4, t4, t2
+    add     s0, s0, t4
+
+    # Shift binary input and BCD digits
+    srli    t2, t0, 7         # MSB for 8-bit input
+    slli    t0, t0, 1
+    srli    t3, s0, 3
+    slli    s0, s0, 1
+    andi    s0, s0, 0xE
+    or      s0, s0, t2
+    mv      t3, t3
+
+    srli    t2, s1, 3
+    slli    s1, s1, 1
+    andi    s1, s1, 0xE
+    or      s1, s1, t3
+    mv      t3, t2
+
+    srli    t2, s2, 3
+    slli    s2, s2, 1
+    andi    s2, s2, 0xE
+    or      s2, s2, t3
+    mv      t3, t2
+
+    srli    t2, s3, 3
+    slli    s3, s3, 1
+    andi    s3, s3, 0xE
+    or      s3, s3, t3
+    mv      t3, t2
+
+    srli    t2, s4, 3
+    slli    s4, s4, 1
+    andi    s4, s4, 0xE
+    or      s4, s4, t3
+    mv      t3, t2
+
+    srli    t2, s5, 3
+    slli    s5, s5, 1
+    andi    s5, s5, 0xE
+    or      s5, s5, t3
+    mv      t3, t2
+
+    srli    t2, s6, 3
+    slli    s6, s6, 1
+    andi    s6, s6, 0xE
+    or      s6, s6, t3
+    mv      t3, t2
+
+    slli    s7, s7, 1
+    andi    s7, s7, 0xE
+    or      s7, s7, t3
+
+
+    # ==== Final pack to output (after 8th iteration) ====
+    mv      t3, s7
+    slli    t3, t3, 4
+    or      t3, t3, s6
+    slli    t3, t3, 4
+    or      t3, t3, s5
+    slli    t3, t3, 4
+    or      t3, t3, s4
+    slli    t3, t3, 4
+    or      t3, t3, s3
+    slli    t3, t3, 4
+    or      t3, t3, s2
+    slli    t3, t3, 4
+    or      t3, t3, s1
+    slli    t3, t3, 4
+    or      t3, t3, s0
+
+    # Write result to CSR io2 for HEX display
+    csrrw   x0, 0xf02, t3
+
+halt:
+    j halt
 

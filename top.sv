@@ -1,113 +1,80 @@
 // top.sv
 // Top-level that instantiates the CPU and drives the 8 seven-seg displays.
-// Replaces the original top and wires CLOCK_50, KEY, SW, HEX0..HEX7 as requested.
+// Reset / KEY signals are treated as ACTIVE-LOW throughout this file.
 
 module top (
+    //////////// CLOCK //////////
+    input                                   CLOCK_50,
+    input                                   CLOCK2_50,
+    input                                   CLOCK3_50,
 
-        //////////// CLOCK //////////
-        input                                   CLOCK_50,
-        input                                   CLOCK2_50,
-        input                                   CLOCK3_50,
+    //////////// LED //////////
+    output               [8:0]              LEDG,
+    output              [17:0]              LEDR,
 
-        //////////// LED //////////
-        output               [8:0]              LEDG,
-        output              [17:0]              LEDR,
+    //////////// KEY //////////
+    // NOTE: DE2 pushbuttons (KEY) are active-low when pressed.
+    input                [3:0]              KEY,
 
-        //////////// KEY //////////
-        input                [3:0]              KEY,
+    //////////// SW //////////
+    input               [17:0]              SW,
 
-        //////////// SW //////////
-        input               [17:0]              SW,
-
-        //////////// SEG7 //////////
-        output               [6:0]              HEX0,
-        output               [6:0]              HEX1,
-        output               [6:0]              HEX2,
-        output               [6:0]              HEX3,
-        output               [6:0]              HEX4,
-        output               [6:0]              HEX5,
-        output               [6:0]              HEX6,
-        output               [6:0]              HEX7
+    //////////// SEG7 //////////
+    output               [6:0]              HEX0,
+    output               [6:0]              HEX1,
+    output               [6:0]              HEX2,
+    output               [6:0]              HEX3,
+    output               [6:0]              HEX4,
+    output               [6:0]              HEX5,
+    output               [6:0]              HEX6,
+    output               [6:0]              HEX7
 );
 
-    //=======================================================
-    //  REG/WIRE declarations (LED animation)
-    //=======================================================
-    logic [23:0] clkdiv;
-    logic ledclk;
-
-    /* driver for LEDs */
-    logic [25:0] leds;
-    logic ledstate;
-
-    assign ledclk = clkdiv[23];
-    assign LEDR = leds[25:8];
-    assign LEDG = leds[7:0];
-
-    initial begin
-        clkdiv = 26'h0;
-        /* start at the far right, LEDG0 */
-        leds = 26'b1;
-        /* start out going to the left */
-        ledstate = 1'b0;
-    end
-
-    always @(posedge CLOCK_50) begin
-        clkdiv <= clkdiv + 1;
-    end
-
-    always @(posedge ledclk) begin
-        if ( (ledstate == 0) && (leds == 26'b10000000000000000000000000) ) begin
-            ledstate <= 1;
-            leds <= leds >> 1;
-        end else if (ledstate == 0) begin
-            ledstate <= 0;
-            leds <= leds << 1;
-        end else if ( (ledstate == 1) && (leds == 26'b1) ) begin
-            ledstate <= 0;
-            leds <= leds << 1;
-        end else begin
-            leds <= leds >> 1;
-        end
-    end
-
-    //=======================================================
-    //  CPU instantiation and HEX driving
-    //=======================================================
-    logic [31:0] cpu_gpio_in;
+    // ---------------------------------------------------------------------
+    // Internal signals
+    // ---------------------------------------------------------------------
+    // cpu_gpio_out is driven by cpu (32-bit). We'll display its 8 nibbles on HEX0..HEX7.
     logic [31:0] cpu_gpio_out;
 
-    // Map switches into lower 18 bits of gpio_in (zero-extend upper bits)
-    assign cpu_gpio_in = {14'd0, SW};
+    // If you have other modules that expected an active-high reset, they should
+    // now be updated to treat reset as active-low as well (i.e., assert when 0).
+    // Here we wire KEY[0] directly as an active-low reset.
+    // Pressing KEY[0] (makes it 0) will assert reset.
+    wire rst_n = KEY[0]; // active-low reset signal (rst_n == 0 means reset asserted)
 
-    // Reset: board KEY[0] is active-low pushbutton. CPU expects active-high rst.
-    // So assert rst when KEY[0] == 0 (pressed).
+    // ---------------------------------------------------------------------
+    // Instantiate CPU
+    // ---------------------------------------------------------------------
+    // IMPORTANT: This cpu instance now expects an active-low reset input.
+    // That means within cpu.sv your cpu module should treat rst as active-low.
+    // Example: if (rst_n == 1'b0) begin /* reset logic */ end
     cpu cpu0 (
-        .clk      (CLOCK_50),
-        .rst      (~KEY[0]),
-        .gpio_in  (cpu_gpio_in),
-        .gpio_out (cpu_gpio_out)
+        .clk      (CLOCK_50),           // 50 MHz clock
+        .rst      (rst_n),              // active-low reset: KEY[0] pressed -> rst=0 -> reset asserted
+        .gpio_in  ({14'b0, SW}),        // extend SW[17:0] to 32 bits (upper bits zero)
+        .gpio_out (cpu_gpio_out)        // 32-bit gpio -> map to HEX displays
     );
 
-    // Split cpu_gpio_out into 8 nibbles for HEX0..HEX7
-    wire [3:0] nib0 = cpu_gpio_out[3:0];
-    wire [3:0] nib1 = cpu_gpio_out[7:4];
-    wire [3:0] nib2 = cpu_gpio_out[11:8];
-    wire [3:0] nib3 = cpu_gpio_out[15:12];
-    wire [3:0] nib4 = cpu_gpio_out[19:16];
-    wire [3:0] nib5 = cpu_gpio_out[23:20];
-    wire [3:0] nib6 = cpu_gpio_out[27:24];
-    wire [3:0] nib7 = cpu_gpio_out[31:28];
+    // ---------------------------------------------------------------------
+    // Drive the HEX displays: break cpu_gpio_out into 8 nibbles
+    // ---------------------------------------------------------------------
+    // If your hexdriver module has different port names, adapt the instance ports.
+    // Here each hexdriver instance converts a 4-bit nibble to a 7-bit segment vector.
+    // HEX0 shows bits [3:0] (LSB), HEX7 shows [31:28] (MSB).
+    hexdriver hd0  (.in(cpu_gpio_out[ 3: 0]), .out(HEX0));
+    hexdriver hd1  (.in(cpu_gpio_out[ 7: 4]), .out(HEX1));
+    hexdriver hd2  (.in(cpu_gpio_out[11: 8]), .out(HEX2));
+    hexdriver hd3  (.in(cpu_gpio_out[15:12]), .out(HEX3));
+    hexdriver hd4  (.in(cpu_gpio_out[19:16]), .out(HEX4));
+    hexdriver hd5  (.in(cpu_gpio_out[23:20]), .out(HEX5));
+    hexdriver hd6  (.in(cpu_gpio_out[27:24]), .out(HEX6));
+    hexdriver hd7  (.in(cpu_gpio_out[31:28]), .out(HEX7));
 
-    // Instantiate hexdriver modules (one per 7-seg)
-    // If your hexdriver module uses different port names, update these instances.
-    hexdriver hd0 (.nibble(nib0), .seg(HEX0));
-    hexdriver hd1 (.nibble(nib1), .seg(HEX1));
-    hexdriver hd2 (.nibble(nib2), .seg(HEX2));
-    hexdriver hd3 (.nibble(nib3), .seg(HEX3));
-    hexdriver hd4 (.nibble(nib4), .seg(HEX4));
-    hexdriver hd5 (.nibble(nib5), .seg(HEX5));
-    hexdriver hd6 (.nibble(nib6), .seg(HEX6));
-    hexdriver hd7 (.nibble(nib7), .seg(HEX7));
+    // ---------------------------------------------------------------------
+    // Optional: tie unused LEDs off (or hook to other signals you like)
+    // ---------------------------------------------------------------------
+    assign LEDG = 9'd0;
+    assign LEDR = 18'd0;
 
 endmodule
+

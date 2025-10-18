@@ -1,6 +1,8 @@
-// cpu.sv
+// cpu.sv - modified for active-low asynchronous reset (rst is active LOW)
 // 3-stage pipeline CPU (F -> EX -> WB) implementing a small RV32I subset.
 // Connects to external ALU, regfile and CSR I/O (gpio_in / gpio_out).
+//
+// Now: rst is ACTIVE-LOW (asserted when rst == 1'b0).
 //
 // Assumptions (if your module uses different port names, adapt the instance port names):
 //  - alu.sv ports: A, B, op, R, zero
@@ -9,20 +11,21 @@
 
 module cpu (
     input  logic        clk,        // CLOCK_50 from top
-    input  logic        rst,        // active-high reset (KEY[0] pressed -> reset)
+    input  logic        rst,        // ACTIVE-LOW reset (asserted when rst==0)
     input  logic [31:0] gpio_in,    // e.g. switches -> CSR read (io0)
     output logic [31:0] gpio_out    // e.g. HEX output driver -> CSR write (io2/io3)
 );
 
     // instruction memory (4096 x 32)
-    logic [31:0] instmem [0:4095];
+    logic [31:0] instmem [4095:0];
     initial $readmemh("instmem.dat", instmem);
 
     // Program counter (word addressed)
     logic [11:0] pc_F;
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) pc_F <= 12'd0;
-        else     pc_F <= pc_F + 12'd1;
+    // active-low asynchronous reset: sensitive to negedge rst
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) pc_F <= 12'd0;
+        else      pc_F <= pc_F + 12'd1;
     end
 
     // Fetch register (synchronous memory read)
@@ -31,9 +34,9 @@ module cpu (
 
     // EX-stage register: instruction register
     logic [31:0] instr_EX;
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) instr_EX <= 32'd0;
-        else     instr_EX <= instr_F;
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) instr_EX <= 32'd0;
+        else      instr_EX <= instr_F;
     end
 
     // ---- decoder outputs in EX stage ----
@@ -130,8 +133,8 @@ module cpu (
     logic        regwrite_WB;
     logic [31:0] imm_u_EX_reg;
 
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
             alu_result_WB <= 32'd0;
             csr_read_WB   <= 32'd0;
             rd_WB         <= 5'd0;
@@ -166,8 +169,8 @@ module cpu (
     end
 
     // register file write control (registered on posedge)
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
             rf_we_WB <= 1'b0;
             rf_writeaddr_WB <= 5'd0;
         end else begin
@@ -179,8 +182,8 @@ module cpu (
     // ---- CSR / GPIO writes (handle writes to io2/io3 -> gpio_out) ---
     // On CSRRW (opcode 1110011, funct3==001), write value of rs1 into CSR.
     // If CSR addr is 0xF02 or 0xF03 -> map to gpio_out (direct 32-bit).
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) gpio_out <= 32'd0;
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) gpio_out <= 32'd0;
         else begin
             if (opcode_EX == 7'b1110011 && funct3_EX == 3'b001) begin
                 if (csr_addr_EX == 12'hF02 || csr_addr_EX == 12'hF03) begin
