@@ -26,6 +26,7 @@ _start:
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
+    addi    x0,  x0, 0
 
     # ---- digit 1 (tens place) ----
     mulhu   t4, t0, t1
@@ -40,6 +41,7 @@ _start:
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
+    addi    x0,  x0, 0
 
     # ---- digit 2 (hundreds place) ----
     mulhu   t4, t0, t1
@@ -54,6 +56,7 @@ _start:
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
+    addi    x0,  x0, 0
 
     # ---- digit 3 (thousands place) ----
     mulhu   t4, t0, t1
@@ -68,6 +71,7 @@ _start:
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
+    addi    x0,  x0, 0
 
     # ---- digit 4 (ten-thousands place) ----
     mulhu   t4, t0, t1
@@ -82,6 +86,7 @@ _start:
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
+    addi    x0,  x0, 0
 
     # ---- digit 5 (hundred-thousands place) ----
     mulhu   t4, t0, t1
@@ -96,6 +101,7 @@ _start:
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
+    addi    x0,  x0, 0
 
     # ---- digit 6 (millions place) ----
     mulhu   t4, t0, t1
@@ -110,6 +116,7 @@ _start:
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
+    addi    x0,  x0, 0
 
     # ---- digit 7 (ten-millions place) ----
     mulhu   t4, t0, t1
@@ -124,6 +131,7 @@ _start:
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
+    addi    x0,  x0, 0
 
     csrrw   x0, 0xf02, s0          # write packed BCD to io2 (HEX displays)
 
