@@ -84,6 +84,15 @@ module cpu (
     // ---- register file (external) ----
     logic [31:0] rf_readdata1_EX, rf_readdata2_EX;
     logic [31:0] rf_writedata_WB;
+    logic [31:0] alu_result_WB;
+    logic [31:0] csr_read_WB;
+    logic [4:0]  rd_WB;
+    logic [1:0]  regsel_WB;
+    logic        regwrite_WB;
+    logic [31:0] imm_u_WB;
+    logic        csr_we_WB;
+    logic [11:0] csr_addr_WB;
+    logic [31:0] rs1_value_WB;
 
     regfile rf (
         .clk        (clk),
@@ -120,16 +129,6 @@ module cpu (
     );
 
     // ---- EX -> WB registers ----
-    logic [31:0] alu_result_WB;
-    logic [31:0] csr_read_WB;
-    logic [4:0]  rd_WB;
-    logic [1:0]  regsel_WB;
-    logic        regwrite_WB;
-    logic [31:0] imm_u_WB;
-    logic        csr_we_WB;
-    logic [11:0] csr_addr_WB;
-    logic [31:0] rs1_value_WB;
-
     logic csr_we_EX;
     assign csr_we_EX = (opcode_EX == 7'b1110011 && funct3_EX == 3'b001);
 
