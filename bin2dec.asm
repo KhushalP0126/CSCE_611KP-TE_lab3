@@ -34,7 +34,7 @@ _start:
     andi    t5, t5, 0xF            # mask to 4 bits
     addi    x0, x0, 0              # NOP
     addi    x0, x0, 0              # NOP
-    slli    t5, t5, 0              # bits 0-3 (HEX0 - rightmost display)
+    slli    t5, t5, 28             # bits 28-31 (HEX0 - rightmost display)
     addi    x0, x0, 0              # NOP
     addi    x0, x0, 0              # NOP
     or      s0, s0, t5
@@ -57,7 +57,7 @@ _start:
     andi    t5, t5, 0xF
     addi    x0, x0, 0
     addi    x0, x0, 0
-    slli    t5, t5, 4              # bits 4-7 (HEX1)
+    slli    t5, t5, 24             # bits 24-27 (HEX1)
     addi    x0, x0, 0
     addi    x0, x0, 0
     or      s0, s0, t5
@@ -80,7 +80,7 @@ _start:
     andi    t5, t5, 0xF
     addi    x0, x0, 0
     addi    x0, x0, 0
-    slli    t5, t5, 8              # bits 8-11 (HEX2)
+    slli    t5, t5, 20             # bits 20-23 (HEX2)
     addi    x0, x0, 0
     addi    x0, x0, 0
     or      s0, s0, t5
@@ -103,7 +103,7 @@ _start:
     andi    t5, t5, 0xF
     addi    x0, x0, 0
     addi    x0, x0, 0
-    slli    t5, t5, 12             # bits 12-15 (HEX3)
+    slli    t5, t5, 16             # bits 16-19 (HEX3)
     addi    x0, x0, 0
     addi    x0, x0, 0
     or      s0, s0, t5
@@ -126,7 +126,7 @@ _start:
     andi    t5, t5, 0xF
     addi    x0, x0, 0
     addi    x0, x0, 0
-    slli    t5, t5, 16             # bits 16-19 (HEX4)
+    slli    t5, t5, 12             # bits 12-15 (HEX4)
     addi    x0, x0, 0
     addi    x0, x0, 0
     or      s0, s0, t5
@@ -149,7 +149,7 @@ _start:
     andi    t5, t5, 0xF
     addi    x0, x0, 0
     addi    x0, x0, 0
-    slli    t5, t5, 20             # bits 20-23 (HEX5)
+    slli    t5, t5, 8              # bits 8-11 (HEX5)
     addi    x0, x0, 0
     addi    x0, x0, 0
     or      s0, s0, t5
@@ -172,7 +172,7 @@ _start:
     andi    t5, t5, 0xF
     addi    x0, x0, 0
     addi    x0, x0, 0
-    slli    t5, t5, 24             # bits 24-27 (HEX6)
+    slli    t5, t5, 4              # bits 4-7 (HEX6)
     addi    x0, x0, 0
     addi    x0, x0, 0
     or      s0, s0, t5
@@ -195,7 +195,7 @@ _start:
     andi    t5, t5, 0xF
     addi    x0, x0, 0
     addi    x0, x0, 0
-    slli    t5, t5, 28             # bits 28-31 (HEX7 - leftmost display)
+    slli    t5, t5, 0              # bits 0-3 (HEX7 - leftmost display)
     addi    x0, x0, 0
     addi    x0, x0, 0
     or      s0, s0, t5
