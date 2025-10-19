@@ -28,15 +28,13 @@ module cpu (
         else      pc_F <= pc_F + 12'd1;
     end
 
-    // Fetch register (synchronous memory read)
-    logic [31:0] instr_F;
-    always_ff @(posedge clk) instr_F <= instmem[pc_F];
-
-    // EX-stage register: instruction register
+    // Instruction register for EX stage. Instruction memory is treated as
+    // combinational, so the fetched instruction is already "in" EX when we
+    // capture it here.
     logic [31:0] instr_EX;
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) instr_EX <= 32'd0;
-        else      instr_EX <= instr_F;
+        else      instr_EX <= instmem[pc_F];
     end
 
     // ---- decoder outputs in EX stage ----
@@ -67,7 +65,6 @@ module cpu (
     logic        regwrite_EX;
     logic [1:0]  regsel_EX;
     logic [3:0]  aluop_EX;
-    logic        gpio_we_EX;
     logic [11:0] csr_addr_EX;
 
     control_unit cu (
@@ -81,22 +78,19 @@ module cpu (
         .regwrite(regwrite_EX),
         .regsel(regsel_EX),
         .aluop(aluop_EX),
-        .gpio_we(gpio_we_EX),
         .csr_addr(csr_addr_EX)
     );
 
     // ---- register file (external) ----
     logic [31:0] rf_readdata1_EX, rf_readdata2_EX;
-    logic        rf_we_WB;
-    logic [4:0]  rf_writeaddr_WB;
     logic [31:0] rf_writedata_WB;
 
     regfile rf (
         .clk        (clk),
-        .we         (rf_we_WB),
+        .we         (regwrite_WB),
         .readaddr1  (rs1_EX),
         .readaddr2  (rs2_EX),
-        .writeaddr  (rf_writeaddr_WB),
+        .writeaddr  (rd_WB),
         .writedata  (rf_writedata_WB),
         .readdata1  (rf_readdata1_EX),
         .readdata2  (rf_readdata2_EX)
@@ -131,7 +125,13 @@ module cpu (
     logic [4:0]  rd_WB;
     logic [1:0]  regsel_WB;
     logic        regwrite_WB;
-    logic [31:0] imm_u_EX_reg;
+    logic [31:0] imm_u_WB;
+    logic        csr_we_WB;
+    logic [11:0] csr_addr_WB;
+    logic [31:0] rs1_value_WB;
+
+    logic csr_we_EX;
+    assign csr_we_EX = (opcode_EX == 7'b1110011 && funct3_EX == 3'b001);
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
@@ -140,21 +140,30 @@ module cpu (
             rd_WB         <= 5'd0;
             regsel_WB     <= 2'b00;
             regwrite_WB   <= 1'b0;
-            imm_u_EX_reg  <= 32'd0;
+            imm_u_WB      <= 32'd0;
+            csr_we_WB     <= 1'b0;
+            csr_addr_WB   <= 12'd0;
+            rs1_value_WB  <= 32'd0;
         end else begin
             alu_result_WB <= alu_R_EX;
-            // CSR readback mapping (simple):
-            if (opcode_EX == 7'b1110011 && funct3_EX == 3'b001) begin
+            // CSR readback mapping (simple): only CSRRW cared about
+            if (csr_we_EX) begin
                 case (csr_addr_EX)
-                    12'hF00: csr_read_WB <= gpio_in; // io0 -> switches
+                    12'hF00: csr_read_WB <= gpio_in;          // io0 -> switches
+                    12'hF02, 12'hF03: csr_read_WB <= gpio_out; // return previous OUT value
                     default: csr_read_WB <= 32'd0;
                 endcase
-            end else csr_read_WB <= 32'd0;
+            end else begin
+                csr_read_WB <= 32'd0;
+            end
 
             rd_WB       <= rd_EX;
             regsel_WB   <= regsel_EX;
             regwrite_WB <= regwrite_EX;
-            imm_u_EX_reg<= imm_u_EX;
+            imm_u_WB    <= imm_u_EX;
+            csr_we_WB   <= csr_we_EX;
+            csr_addr_WB <= csr_addr_EX;
+            rs1_value_WB<= rf_readdata1_EX;
         end
     end
 
@@ -163,36 +172,21 @@ module cpu (
         unique case (regsel_WB)
             2'b00: rf_writedata_WB = alu_result_WB;
             2'b01: rf_writedata_WB = csr_read_WB;
-            2'b10: rf_writedata_WB = imm_u_EX_reg;
+            2'b10: rf_writedata_WB = imm_u_WB;
             default: rf_writedata_WB = alu_result_WB;
         endcase
-    end
-
-    // register file write control (registered on posedge)
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
-            rf_we_WB <= 1'b0;
-            rf_writeaddr_WB <= 5'd0;
-        end else begin
-            rf_we_WB <= regwrite_WB;
-            rf_writeaddr_WB <= rd_WB;
-        end
     end
 
     // ---- CSR / GPIO writes (handle writes to io2/io3 -> gpio_out) ---
     // On CSRRW (opcode 1110011, funct3==001), write value of rs1 into CSR.
     // If CSR addr is 0xF02 or 0xF03 -> map to gpio_out (direct 32-bit).
     always_ff @(posedge clk or negedge rst) begin
-        if (!rst) gpio_out <= 32'd0;
-        else begin
-            if (opcode_EX == 7'b1110011 && funct3_EX == 3'b001) begin
-                if (csr_addr_EX == 12'hF02 || csr_addr_EX == 12'hF03) begin
-                    // write value of rs1 (we have rf_readdata1_EX available in EX stage)
-                    gpio_out <= rf_readdata1_EX;
-                end
-            end
+        if (!rst) begin
+            gpio_out <= 32'd0;
+        end else if (csr_we_WB && (csr_addr_WB == 12'hF02 || csr_addr_WB == 12'hF03)) begin
+            // write value of rs1 (captured in EX stage and forwarded into WB stage)
+            gpio_out <= rs1_value_WB;
         end
     end
 
 endmodule
-

@@ -1,7 +1,7 @@
 // control_unit.sv
 // Simple combinational control unit for the lab subset:
 // R-type (arithmetic), I-type (arithmetic + shifts), LUI, CSRRW (CSR read/write).
-// Outputs: alusrc, regwrite, regsel, aluop, gpio_we, csr_addr.
+// Outputs: alusrc, regwrite, regsel, aluop, csr_addr.
 
 module control_unit (
     input  logic [6:0]  opcode,
@@ -14,7 +14,6 @@ module control_unit (
     output logic        regwrite,     // write register file
     output logic [1:0]  regsel,       // 00=ALU,01=CSR readback,10=U-immediate
     output logic [3:0]  aluop,        // ALU opcode (matches alu.sv encoding assumed)
-    output logic        gpio_we,      // signal to indicate write to GPIO CSRs (io2/io3)
     output logic [11:0] csr_addr
 );
 
@@ -24,7 +23,6 @@ module control_unit (
         regwrite = 1'b0;
         regsel   = 2'b00;
         aluop    = 4'b0011; // default ADD
-        gpio_we  = 1'b0;
         csr_addr = csr_imm;
 
         unique case (opcode)
@@ -44,6 +42,8 @@ module control_unit (
                     {7'b0000000,3'b010}: aluop = 4'b1100; // SLT
                     {7'b0000000,3'b011}: aluop = 4'b1101; // SLTU
                     {7'b0000001,3'b000}: aluop = 4'b0101; // MUL
+                    {7'b0000001,3'b001}: aluop = 4'b0110; // MULH
+                    {7'b0000001,3'b011}: aluop = 4'b0111; // MULHU
                     default: aluop = 4'b0011;
                 endcase
             end
@@ -77,7 +77,6 @@ module control_unit (
                 if (funct3 == 3'b001) begin
                     regwrite = 1'b1;   // write old CSR value to rd
                     regsel   = 2'b01;  // select CSR readback for writeback
-                    // gpio_we will be asserted in cpu.sv when csr_addr matches io2/io3
                 end
             end
 
