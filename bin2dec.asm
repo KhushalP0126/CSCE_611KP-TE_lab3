@@ -22,7 +22,7 @@ _start:
     addi    x0,  x0, 0
     andi    t5, t5, 0xF
     addi    x0,  x0, 0
-    slli    t5, t5, 0
+    slli    t5, t5, 28
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
@@ -37,7 +37,7 @@ _start:
     addi    x0,  x0, 0
     andi    t5, t5, 0xF
     addi    x0,  x0, 0
-    slli    t5, t5, 4
+    slli    t5, t5, 24
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
@@ -52,7 +52,7 @@ _start:
     addi    x0,  x0, 0
     andi    t5, t5, 0xF
     addi    x0,  x0, 0
-    slli    t5, t5, 8
+    slli    t5, t5, 20
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
@@ -67,7 +67,7 @@ _start:
     addi    x0,  x0, 0
     andi    t5, t5, 0xF
     addi    x0,  x0, 0
-    slli    t5, t5, 12
+    slli    t5, t5, 16
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
@@ -82,7 +82,7 @@ _start:
     addi    x0,  x0, 0
     andi    t5, t5, 0xF
     addi    x0,  x0, 0
-    slli    t5, t5, 16
+    slli    t5, t5, 12
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
@@ -97,7 +97,7 @@ _start:
     addi    x0,  x0, 0
     andi    t5, t5, 0xF
     addi    x0,  x0, 0
-    slli    t5, t5, 20
+    slli    t5, t5, 8
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
@@ -112,7 +112,7 @@ _start:
     addi    x0,  x0, 0
     andi    t5, t5, 0xF
     addi    x0,  x0, 0
-    slli    t5, t5, 24
+    slli    t5, t5, 4
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
@@ -127,7 +127,7 @@ _start:
     addi    x0,  x0, 0
     andi    t5, t5, 0xF
     addi    x0,  x0, 0
-    slli    t5, t5, 28
+    slli    t5, t5, 0
     addi    x0,  x0, 0
     or      s0, s0, t5
     addi    t0, t4, 0
