@@ -60,15 +60,15 @@ module top (
     // ---------------------------------------------------------------------
     // If your hexdriver module has different port names, adapt the instance ports.
     // Here each hexdriver instance converts a 4-bit nibble to a 7-bit segment vector.
-    // HEX0 shows bits [3:0] (LSB), HEX7 shows [31:28] (MSB).
-    hexdriver hd0  (.in(cpu_gpio_out[ 3: 0]), .out(HEX0));
-    hexdriver hd1  (.in(cpu_gpio_out[ 7: 4]), .out(HEX1));
-    hexdriver hd2  (.in(cpu_gpio_out[11: 8]), .out(HEX2));
-    hexdriver hd3  (.in(cpu_gpio_out[15:12]), .out(HEX3));
-    hexdriver hd4  (.in(cpu_gpio_out[19:16]), .out(HEX4));
-    hexdriver hd5  (.in(cpu_gpio_out[23:20]), .out(HEX5));
-    hexdriver hd6  (.in(cpu_gpio_out[27:24]), .out(HEX6));
-    hexdriver hd7  (.in(cpu_gpio_out[31:28]), .out(HEX7));
+    // Show the least-significant digit on HEX7 (rightmost) and most-significant on HEX0 (leftmost)
+    hexdriver hd0  (.in(cpu_gpio_out[31:28]), .out(HEX0));
+    hexdriver hd1  (.in(cpu_gpio_out[27:24]), .out(HEX1));
+    hexdriver hd2  (.in(cpu_gpio_out[23:20]), .out(HEX2));
+    hexdriver hd3  (.in(cpu_gpio_out[19:16]), .out(HEX3));
+    hexdriver hd4  (.in(cpu_gpio_out[15:12]), .out(HEX4));
+    hexdriver hd5  (.in(cpu_gpio_out[11: 8]), .out(HEX5));
+    hexdriver hd6  (.in(cpu_gpio_out[ 7: 4]), .out(HEX6));
+    hexdriver hd7  (.in(cpu_gpio_out[ 3: 0]), .out(HEX7));
 
     // ---------------------------------------------------------------------
     // Optional: tie unused LEDs off (or hook to other signals you like)
@@ -77,4 +77,3 @@ module top (
     assign LEDR = 18'd0;
 
 endmodule
-
