@@ -14,8 +14,15 @@ module control_unit (
     output logic        regwrite,     // write register file
     output logic [1:0]  regsel,       // 00=ALU,01=CSR readback,10=U-immediate
     output logic [3:0]  aluop,        // ALU opcode (matches alu.sv encoding assumed)
-    output logic [11:0] csr_addr
+    output logic [11:0] csr_addr,
+    output logic        csr_we,       // assert on CSRRW to write CSRs
+    output logic        gpio_we       // assert when CSRRW targets GPIO out
 );
+
+    // Memory-mapped CSR addresses used for GPIO interaction
+    localparam logic [11:0] CSR_GPIO_IN   = 12'hF00;
+    localparam logic [11:0] CSR_GPIO_OUT0 = 12'hF02;
+    localparam logic [11:0] CSR_GPIO_OUT1 = 12'hF03;
 
     always_comb begin
         // defaults
@@ -24,6 +31,8 @@ module control_unit (
         regsel   = 2'b00;
         aluop    = 4'b0011; // default ADD
         csr_addr = csr_imm;
+        csr_we   = 1'b0;
+        gpio_we  = 1'b0;
 
         unique case (opcode)
             7'b0110011: begin // R-type
@@ -77,6 +86,10 @@ module control_unit (
                 if (funct3 == 3'b001) begin
                     regwrite = 1'b1;   // write old CSR value to rd
                     regsel   = 2'b01;  // select CSR readback for writeback
+                    csr_we   = 1'b1;
+                    if (csr_imm == CSR_GPIO_OUT0 || csr_imm == CSR_GPIO_OUT1) begin
+                        gpio_we = 1'b1;
+                    end
                 end
             end
 

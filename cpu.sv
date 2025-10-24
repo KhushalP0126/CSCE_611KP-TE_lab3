@@ -16,6 +16,11 @@ module cpu (
     output logic [31:0] gpio_out    // e.g. HEX output driver -> CSR write (io2/io3)
 );
 
+    // CSR addresses used for GPIO mappings
+    localparam logic [11:0] CSR_GPIO_IN   = 12'hF00;
+    localparam logic [11:0] CSR_GPIO_OUT0 = 12'hF02;
+    localparam logic [11:0] CSR_GPIO_OUT1 = 12'hF03;
+
     // instruction memory (4096 x 32)
     logic [31:0] instmem [4095:0];
     initial $readmemh("instmem.dat", instmem);
@@ -66,6 +71,8 @@ module cpu (
     logic [1:0]  regsel_EX;
     logic [3:0]  aluop_EX;
     logic [11:0] csr_addr_EX;
+    logic        csr_we_EX;
+    logic        gpio_we_EX;
 
     control_unit cu (
         .opcode(opcode_EX),
@@ -78,7 +85,9 @@ module cpu (
         .regwrite(regwrite_EX),
         .regsel(regsel_EX),
         .aluop(aluop_EX),
-        .csr_addr(csr_addr_EX)
+        .csr_addr(csr_addr_EX),
+        .csr_we(csr_we_EX),
+        .gpio_we(gpio_we_EX)
     );
 
     // ---- register file (external) ----
@@ -91,6 +100,7 @@ module cpu (
     logic        regwrite_WB;
     logic [31:0] imm_u_WB;
     logic        csr_we_WB;
+    logic        gpio_we_WB;
     logic [11:0] csr_addr_WB;
     logic [31:0] rs1_value_WB;
 
@@ -129,9 +139,6 @@ module cpu (
     );
 
     // ---- EX -> WB registers ----
-    logic csr_we_EX;
-    assign csr_we_EX = (opcode_EX == 7'b1110011 && funct3_EX == 3'b001);
-
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             alu_result_WB <= 32'd0;
@@ -141,6 +148,7 @@ module cpu (
             regwrite_WB   <= 1'b0;
             imm_u_WB      <= 32'd0;
             csr_we_WB     <= 1'b0;
+            gpio_we_WB    <= 1'b0;
             csr_addr_WB   <= 12'd0;
             rs1_value_WB  <= 32'd0;
         end else begin
@@ -148,8 +156,8 @@ module cpu (
             // CSR readback mapping (simple): only CSRRW cared about
             if (csr_we_EX) begin
                 case (csr_addr_EX)
-                    12'hF00: csr_read_WB <= gpio_in;          // io0 -> switches
-                    12'hF02, 12'hF03: csr_read_WB <= gpio_out; // return previous OUT value
+                    CSR_GPIO_IN:                     csr_read_WB <= gpio_in;   // io0 -> switches
+                    CSR_GPIO_OUT0, CSR_GPIO_OUT1:    csr_read_WB <= gpio_out;  // return previous OUT value
                     default: csr_read_WB <= 32'd0;
                 endcase
             end else begin
@@ -161,6 +169,7 @@ module cpu (
             regwrite_WB <= regwrite_EX;
             imm_u_WB    <= imm_u_EX;
             csr_we_WB   <= csr_we_EX;
+            gpio_we_WB  <= gpio_we_EX;
             csr_addr_WB <= csr_addr_EX;
             rs1_value_WB<= rf_readdata1_EX;
         end
@@ -182,7 +191,7 @@ module cpu (
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             gpio_out <= 32'd0;
-        end else if (csr_we_WB && (csr_addr_WB == 12'hF02 || csr_addr_WB == 12'hF03)) begin
+        end else if (gpio_we_WB) begin
             // write value of rs1 (captured in EX stage and forwarded into WB stage)
             gpio_out <= rs1_value_WB;
         end
