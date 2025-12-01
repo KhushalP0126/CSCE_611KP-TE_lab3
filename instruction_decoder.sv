@@ -17,6 +17,8 @@ module instruction_decoder (
     output logic [31:0] imm_i,    // sign-extended I-type imm
     output logic [31:0] imm_u,    // U-type imm << 12
     output logic [4:0]  shamt,
+    output logic [31:0] imm_b_offset,
+    output logic [31:0] imm_j_offset,
 
     // instruction class hint
     output logic [1:0]  instr_type // 00=R,01=I,10=U,11=OTHER
@@ -39,6 +41,19 @@ module instruction_decoder (
     assign imm20 = instr[31:12];
     assign imm_u = {imm20, 12'b0};
 
+    // J-type immediate
+    
+    logic[20:0] imm_j;
+    assign imm_j_offset = {instr[31], instr[31], instr[19:12], instr[20], instr[30:21], 1'b0};
+    // Sign-extend
+    assign [20:0] imm_j = {{11{imm_j_offset[20]}}, imm_j_offset};
+
+    // B-type immediate
+    logic [12:0] imm_addr_b;
+    assign imm_b_offset = {{instr[31], instr[7], instr[30:25], instr[11:8], 1'b0};
+    // Sign Extend
+    assign [12:0] imm_addr_b = {{19{imm_b_offset[12]}}, imm_b_offset};
+
     // shamt for shift-immediate encoded in instr[24:20]
     assign shamt = instr[24:20];
 
@@ -49,6 +64,8 @@ module instruction_decoder (
             7'b0010011: instr_type = 2'b01; // I-type (arith imm / shifts)
             7'b0110111: instr_type = 2'b10; // U-type (LUI)
             7'b1110011: instr_type = 2'b01; // CSR family encoded as I-type (csrrw)
+            7'b1101111: instr_type = 2'b11; // JAL\J-type
+            7'b1100111: instr_type = 2'b01; //for JAL-R(I-Type)
             default:     instr_type = 2'b11;
         endcase
     end

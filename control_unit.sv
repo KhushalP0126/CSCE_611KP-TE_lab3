@@ -11,18 +11,12 @@ module control_unit (
     input  logic [11:0] csr_imm,      // instr[31:20] when CSR present
 
     output logic        alusrc,       // 0 = rs2, 1 = imm/shamt
+    output logic        gpio_we,      // write priviledges == 1, none == 0; read priveledges are on either-or
     output logic        regwrite,     // write register file
     output logic [1:0]  regsel,       // 00=ALU,01=CSR readback,10=U-immediate
     output logic [3:0]  aluop,        // ALU opcode (matches alu.sv encoding assumed)
-    output logic [11:0] csr_addr,
-    output logic        csr_we,       // assert on CSRRW to write CSRs
-    output logic        gpio_we       // assert when CSRRW targets GPIO out
+    output logic [11:0] csr_addr
 );
-
-    // Memory-mapped CSR addresses used for GPIO interaction
-    localparam logic [11:0] CSR_GPIO_IN   = 12'hF00;
-    localparam logic [11:0] CSR_GPIO_OUT0 = 12'hF02;
-    localparam logic [11:0] CSR_GPIO_OUT1 = 12'hF03;
 
     always_comb begin
         // defaults
@@ -31,8 +25,10 @@ module control_unit (
         regsel   = 2'b00;
         aluop    = 4'b0011; // default ADD
         csr_addr = csr_imm;
-        csr_we   = 1'b0;
-        gpio_we  = 1'b0;
+        gpio_we = 1'b0;
+        branch = 1'b0
+        jal = 1'b0
+        jalr = 1'b0
 
         unique case (opcode)
             7'b0110011: begin // R-type
@@ -81,20 +77,25 @@ module control_unit (
                 regsel   = 2'b10; // U-immediate
                 aluop    = 4'b0011;
             end
+            
+            7'b1100111: begin: // J-type
+                jump = 1'b1
+                jalr = 1'b0
+                regwrite = 1'b1
+                regsel = 2'b11
+                
 
-            7'b1110011: begin // CSRRW (approx)
-                if (funct3 == 3'b001) begin
-                    regwrite = 1'b1;   // write old CSR value to rd
-                    regsel   = 2'b01;  // select CSR readback for writeback
-                    csr_we   = 1'b1;
-                    if (csr_imm == CSR_GPIO_OUT0 || csr_imm == CSR_GPIO_OUT1) begin
-                        gpio_we = 1'b1;
-                    end
-                end
+
             end
 
+            7'b1110011: begin // CSRRW (check if it's etiher SW or HEX)
+                if (funct3 == 3'b001) begin     // otherword, if instruction is CSRRW(HEX)
+                    regwrite = 1'b1;     // write CSR to rd
+                    regsel = 2'b01;      // sel CSR for rd_back and wr_back
+                    gpio_we = 1'b1;      // enable write privileges
+                end
+            end
             default: begin
-                // do nothing (safe defaults)
             end
         endcase
     end
