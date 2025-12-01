@@ -1,7 +1,5 @@
 // control_unit.sv
-// Simple combinational control unit for the lab subset:
-// R-type (arithmetic), I-type (arithmetic + shifts), LUI, CSRRW (CSR read/write).
-// Outputs: alusrc, regwrite, regsel, aluop, csr_addr.
+// Simple combinational control unit for the lab subset with branch/jump support.
 
 module control_unit (
     input  logic [6:0]  opcode,
@@ -11,12 +9,19 @@ module control_unit (
     input  logic [11:0] csr_imm,      // instr[31:20] when CSR present
 
     output logic        alusrc,       // 0 = rs2, 1 = imm/shamt
-    output logic        gpio_we,      // write priviledges == 1, none == 0; read priveledges are on either-or
+    output logic        gpio_we,      // assert when CSRRW targets GPIO out
     output logic        regwrite,     // write register file
-    output logic [1:0]  regsel,       // 00=ALU,01=CSR readback,10=U-immediate
-    output logic [3:0]  aluop,        // ALU opcode (matches alu.sv encoding assumed)
-    output logic [11:0] csr_addr
+    output logic [1:0]  regsel,       // 00=ALU,01=CSR,10=U-immediate,11=PC+4
+    output logic [3:0]  aluop,        // ALU opcode (matches alu.sv encoding)
+    output logic [11:0] csr_addr,
+    output logic        branch,       // branch (B-type) instruction
+    output logic        jal,          // JAL
+    output logic        jalr          // JALR
 );
+
+    // Memory-mapped CSR addresses used for GPIO interaction
+    localparam logic [11:0] CSR_GPIO_OUT0 = 12'hF02;
+    localparam logic [11:0] CSR_GPIO_OUT1 = 12'hF03;
 
     always_comb begin
         // defaults
@@ -25,10 +30,10 @@ module control_unit (
         regsel   = 2'b00;
         aluop    = 4'b0011; // default ADD
         csr_addr = csr_imm;
-        gpio_we = 1'b0;
-        branch = 1'b0
-        jal = 1'b0
-        jalr = 1'b0
+        gpio_we  = 1'b0;
+        branch   = 1'b0;
+        jal      = 1'b0;
+        jalr     = 1'b0;
 
         unique case (opcode)
             7'b0110011: begin // R-type
@@ -77,25 +82,38 @@ module control_unit (
                 regsel   = 2'b10; // U-immediate
                 aluop    = 4'b0011;
             end
-            
-            7'b1100111: begin: // J-type
-                jump = 1'b1
-                jalr = 1'b0
-                regwrite = 1'b1
-                regsel = 2'b11
-                
 
-
+            7'b1100011: begin // Branches (B-type)
+                branch   = 1'b1;
+                regwrite = 1'b0;
+                alusrc   = 1'b0;
             end
 
-            7'b1110011: begin // CSRRW (check if it's etiher SW or HEX)
-                if (funct3 == 3'b001) begin     // otherword, if instruction is CSRRW(HEX)
-                    regwrite = 1'b1;     // write CSR to rd
-                    regsel = 2'b01;      // sel CSR for rd_back and wr_back
-                    gpio_we = 1'b1;      // enable write privileges
+            7'b1101111: begin // JAL
+                jal      = 1'b1;
+                regwrite = 1'b1;
+                regsel   = 2'b11; // write PC+4
+            end
+
+            7'b1100111: begin // JALR
+                jalr     = 1'b1;
+                regwrite = 1'b1;
+                regsel   = 2'b11; // write PC+4
+                alusrc   = 1'b1;  // use immediate for target calculation
+            end
+
+            7'b1110011: begin // CSRRW (GPIO)
+                if (funct3 == 3'b001) begin
+                    regwrite = 1'b1;   // write old CSR value to rd
+                    regsel   = 2'b01;  // select CSR readback for writeback
+                    if (csr_imm == CSR_GPIO_OUT0 || csr_imm == CSR_GPIO_OUT1) begin
+                        gpio_we = 1'b1;
+                    end
                 end
             end
+
             default: begin
+                // keep defaults
             end
         endcase
     end

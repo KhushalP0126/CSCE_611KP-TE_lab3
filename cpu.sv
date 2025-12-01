@@ -22,18 +22,25 @@ module cpu (
 
     // Program counter (word addressed)
     logic [11:0] pc_F;
+    logic [11:0] pc_EX;
+    logic [11:0] pc_next;
     logic [31:0] instr_EX;
-
+    logic        flush_EX;
 
     // active-low asynchronous reset: sensitive to negedge rst
-
     always_ff @(posedge clk or negedge rst) begin
         if (~rst) begin
-            pc_F <= 12'd0;
+            pc_F     <= 12'd0;
+            pc_EX    <= 12'd0;
             instr_EX <= 32'd0;
         end else begin
-            pc_F <= pc_F + 12'd1;
-            instr_EX <= instmem[pc_F];
+            pc_F  <= pc_next;
+            pc_EX <= pc_F;
+            if (flush_EX) begin
+                instr_EX <= 32'd0; // bubble after redirect
+            end else begin
+                instr_EX <= instmem[pc_F];
+            end
         end
     end
 
@@ -43,6 +50,7 @@ module cpu (
     logic [2:0]  funct3_EX;
     logic [4:0]  rd_EX, rs1_EX, rs2_EX;
     logic [31:0] imm_i_EX, imm_u_EX;
+    logic [31:0] imm_b_EX, imm_j_EX;
     logic [4:0]  shamt_EX;
     logic [1:0]  instr_type_EX;
 
@@ -56,6 +64,8 @@ module cpu (
         .rs2(rs2_EX),
         .imm_i(imm_i_EX),
         .imm_u(imm_u_EX),
+        .imm_b(imm_b_EX),
+        .imm_j(imm_j_EX),
         .shamt(shamt_EX),
         .instr_type(instr_type_EX)
     );
@@ -67,6 +77,9 @@ module cpu (
     logic [3:0]  aluop_EX;
     logic [11:0] csr_addr_EX;
     logic        gpio_we_EX;
+    logic        branch_EX;
+    logic        jal_EX;
+    logic        jalr_EX;
 
     control_unit cu (
         .opcode(opcode_EX),
@@ -81,7 +94,10 @@ module cpu (
         .regwrite(regwrite_EX),
         .regsel(regsel_EX),
         .aluop(aluop_EX),
-        .csr_addr(csr_addr_EX)
+        .csr_addr(csr_addr_EX),
+        .branch(branch_EX),
+        .jal(jal_EX),
+        .jalr(jalr_EX)
     );
 
     // ---- register file (external) ----
@@ -96,6 +112,7 @@ module cpu (
     logic [11:0] csr_addr_WB;
     logic [31:0] rs1_value_WB;
     logic        gpio_we_WB;
+    logic [31:0] pc_plus4_WB;
 
     regfile rf (
         .clk        (clk),
@@ -155,6 +172,59 @@ module cpu (
         .zero(alu_zero_EX)
     );
 
+    // ---- Branch / jump calculations ----
+    logic        branch_taken_EX;
+    logic [11:0] branch_target_word;
+    logic [11:0] jal_target_word;
+    logic [11:0] jalr_target_word;
+    logic [31:0] pc_plus4_EX;
+
+    logic signed [31:0] pc_ex_bytes;
+    logic signed [31:0] branch_target_bytes;
+    logic signed [31:0] jal_target_bytes;
+    logic signed [31:0] jalr_target_bytes;
+    logic signed [31:0] branch_target_word32;
+    logic signed [31:0] jal_target_word32;
+    logic signed [31:0] jalr_target_word32;
+
+    assign pc_ex_bytes          = $signed({{20{1'b0}}, pc_EX, 2'b00});
+    assign branch_target_bytes  = pc_ex_bytes + $signed(imm_b_EX);
+    assign jal_target_bytes     = pc_ex_bytes + $signed(imm_j_EX);
+    assign jalr_target_bytes    = $signed((rs1_dat + imm_i_EX) & ~32'd1);
+
+    assign branch_target_word32 = branch_target_bytes >>> 2;
+    assign jal_target_word32    = jal_target_bytes >>> 2;
+    assign jalr_target_word32   = jalr_target_bytes >>> 2;
+
+    assign branch_target_word   = branch_target_word32[11:0];
+    assign jal_target_word      = jal_target_word32[11:0];
+    assign jalr_target_word     = jalr_target_word32[11:0];
+    assign pc_plus4_EX          = {{20{1'b0}}, pc_EX, 2'b00} + 32'd4;
+
+    always_comb begin
+        branch_taken_EX = 1'b0;
+        if (branch_EX) begin
+            unique case (funct3_EX)
+                3'b000: branch_taken_EX = (rs1_dat == rs2_dat);                          // BEQ
+                3'b001: branch_taken_EX = (rs1_dat != rs2_dat);                          // BNE
+                3'b100: branch_taken_EX = ($signed(rs1_dat) <  $signed(rs2_dat));        // BLT
+                3'b101: branch_taken_EX = ($signed(rs1_dat) >= $signed(rs2_dat));        // BGE
+                3'b110: branch_taken_EX = (rs1_dat < rs2_dat);                           // BLTU
+                3'b111: branch_taken_EX = (rs1_dat >= rs2_dat);                          // BGEU
+                default: branch_taken_EX = 1'b0;
+            endcase
+        end
+    end
+
+    assign flush_EX = branch_taken_EX | jal_EX | jalr_EX;
+
+    always_comb begin
+        pc_next = pc_F + 12'd1;
+        if (branch_taken_EX) pc_next = branch_target_word;
+        if (jal_EX)          pc_next = jal_target_word;
+        if (jalr_EX)         pc_next = jalr_target_word;
+    end
+
     // ---- EX -> WB registers ----
 
 
@@ -166,9 +236,10 @@ module cpu (
             regsel_WB     <= 2'b00;
             regwrite_WB   <= 1'b0;
             imm_u_WB      <= 32'd0;
-            gpio_we_WB     <= 1'b0;
+            gpio_we_WB    <= 1'b0;
             csr_addr_WB   <= 12'd0;
             rs1_value_WB  <= 32'd0;
+            pc_plus4_WB   <= 32'd0;
         end else begin
             alu_result_WB <= alu_R_EX;
             // CSR readback mapping (simple): only CSRRW cared about
@@ -186,9 +257,10 @@ module cpu (
             regsel_WB   <= regsel_EX;
             regwrite_WB <= regwrite_EX;
             imm_u_WB    <= imm_u_EX;
-            gpio_we_WB   <= gpio_we_EX;
+            gpio_we_WB  <= gpio_we_EX;
             csr_addr_WB <= csr_addr_EX;
             rs1_value_WB <= (fwd_rs1) ? rf_writedata_WB : rf_readdata1_EX;
+            pc_plus4_WB  <= pc_plus4_EX;
         end
     end
 
@@ -198,6 +270,7 @@ module cpu (
             2'b00: rf_writedata_WB = alu_result_WB;
             2'b01: rf_writedata_WB = csr_read_WB;
             2'b10: rf_writedata_WB = imm_u_WB;
+            2'b11: rf_writedata_WB = pc_plus4_WB;
             default: rf_writedata_WB = alu_result_WB;
         endcase
     end
