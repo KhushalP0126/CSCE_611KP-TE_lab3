@@ -46,7 +46,8 @@ sqrt_done:
     # sp is in Q18.14, so sp represents value * 2^14
     # To get value * 10^5, compute: (sp * 100000) / 16384
     
-    lui     t1, 0x186a0            # t1 = 100000 (0x186a0)
+    lui     t1, 0x18               # load upper bits of 100000 (0x000186a0)
+    addi    t1, t1, 0x6a0          # t1 = 0x000186a0 = 100000
     mul     t0, sp, t1             # t0 = sp * 100000 (low bits)
     mulhu   t2, sp, t1             # t2 = sp * 100000 (high bits)
     
