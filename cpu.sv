@@ -18,7 +18,7 @@ module cpu (
 
     // instruction memory (4096 x 32)
     logic [31:0] instmem [4095:0];
-    initial $readmemh("test.dat", instmem);
+    initial $readmemh("instmem.dat", instmem);
 
     // Program counter (word addressed)
     logic [11:0] pc_F;

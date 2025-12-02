@@ -58,8 +58,11 @@ module instruction_decoder (
     always_comb begin
         unique case (opcode)
             7'b0110011: instr_type = 2'b00; // R-type
-            7'b0010011: instr_type = 2'b01; // I-type (arith imm / shifts)
+            7'b0010011,
+            7'b1100111: instr_type = 2'b01; // I-type (arith imm / shifts + JALR)
             7'b0110111: instr_type = 2'b10; // U-type (LUI)
+            7'b1101111,
+            7'b1100011: instr_type = 2'b11; // treat J- & B-type as "other"
             7'b1110011: instr_type = 2'b01; // CSR family encoded as I-type (csrrw)
             default:     instr_type = 2'b11;
         endcase
