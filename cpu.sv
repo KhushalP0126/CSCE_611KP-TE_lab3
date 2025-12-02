@@ -221,10 +221,15 @@ module cpu (
     assign flush_EX = branch_taken_EX | jal_EX | jalr_EX;
 
     always_comb begin
-        pc_next = pc_F + 12'd1;
-        if (branch_taken_EX) pc_next = branch_target_word;
-        if (jal_EX)          pc_next = jal_target_word;
-        if (jalr_EX)         pc_next = jalr_target_word;
+        if (jalr_EX) begin
+            pc_next = jalr_target_word;
+        end else if (jal_EX) begin
+            pc_next = jal_target_word;
+        end else if (branch_taken_EX) begin
+            pc_next = branch_target_word;
+        end else begin
+            pc_next = pc_F + 12'd1;
+        end
     end
 
     // ---- EX -> WB registers ----
