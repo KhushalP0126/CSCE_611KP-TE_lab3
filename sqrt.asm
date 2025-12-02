@@ -76,6 +76,10 @@ loop_digits:
     addi    t6, t6, -1
     bnez    t6, loop_digits
     
+    # Allow writeback of the last digit before reading s0 for CSR write
+    addi    x0, x0, 0              # NOP - pipeline bubble
+    addi    x0, x0, 0              # NOP - pipeline bubble
+
     # Write packed BCD to io2 (HEX displays)
     csrrw   x0, 0xf02, s0
     
