@@ -16,7 +16,8 @@ module control_unit (
     output logic [11:0] csr_addr,
     output logic        branch,       // branch (B-type) instruction
     output logic        jal,          // JAL
-    output logic        jalr          // JALR
+    output logic        jalr,         // JALR
+    output logic        csr_en        // CSRRW access (read old value, maybe write)
 );
 
     // Memory-mapped CSR addresses used for GPIO interaction
@@ -34,6 +35,7 @@ module control_unit (
         branch   = 1'b0;
         jal      = 1'b0;
         jalr     = 1'b0;
+        csr_en   = 1'b0;
 
         unique case (opcode)
             7'b0110011: begin // R-type
@@ -102,12 +104,13 @@ module control_unit (
                 alusrc   = 1'b1;  // use immediate for target calculation
             end
 
-            7'b1110011: begin // CSRRW (GPIO)
+            7'b1110011: begin // CSRRW
                 if (funct3 == 3'b001) begin
                     regwrite = 1'b1;   // write old CSR value to rd
                     regsel   = 2'b01;  // select CSR readback for writeback
+                    csr_en   = 1'b1;
                     if (csr_imm == CSR_GPIO_OUT0 || csr_imm == CSR_GPIO_OUT1) begin
-                        gpio_we = 1'b1;
+                        gpio_we = 1'b1; // drive GPIO on CSRs mapped to outputs
                     end
                 end
             end

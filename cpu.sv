@@ -77,6 +77,7 @@ module cpu (
     logic [3:0]  aluop_EX;
     logic [11:0] csr_addr_EX;
     logic        gpio_we_EX;
+    logic        csr_en_EX;
     logic        branch_EX;
     logic        jal_EX;
     logic        jalr_EX;
@@ -97,7 +98,8 @@ module cpu (
         .csr_addr(csr_addr_EX),
         .branch(branch_EX),
         .jal(jal_EX),
-        .jalr(jalr_EX)
+        .jalr(jalr_EX),
+        .csr_en(csr_en_EX)
     );
 
     // ---- register file (external) ----
@@ -243,7 +245,7 @@ module cpu (
         end else begin
             alu_result_WB <= alu_R_EX;
             // CSR readback mapping (simple): only CSRRW cared about
-            if (gpio_we_EX) begin
+            if (csr_en_EX) begin
                 case (csr_addr_EX)
                     12'hF00: csr_read_WB <= gpio_in;          // io0 -> switches
                     12'hF02: csr_read_WB <= gpio_out; // return previous OUT value
