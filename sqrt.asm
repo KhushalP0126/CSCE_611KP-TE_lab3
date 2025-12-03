@@ -4,7 +4,7 @@
 # Square root with binary search, then convert to (8,5) decimal format
 _start:
     # Read input from switches
-    csrrw   a0, 0xf00, x3          # a0 = input value from switches (io0)
+    csrrw   a0, 0xf00, x0         # a0 = input value from switches (io0)
     
     # Convert input to Q18.14 fixed-point format
     slli    a0, a0, 14             # a0 = input << 14 (convert to Q18.14)
