@@ -4,10 +4,15 @@
 # Square root with binary search, then convert to (8,5) decimal format
 _start:
     # Read input from switches
-    csrrw   a0, 0xf00, x0          # a0 = input value from switches (io0)
+    csrrw   a0, 0xf00, x0         # a0 = input value from switches (io0)
     
     # Convert input to Q18.14 fixed-point format
     slli    a0, a0, 14             # a0 = input << 14 (convert to Q18.14)
+    
+    #debug
+    #addi    s0, a0, 0
+    #csrrw   x0, 0xf02, s0
+    #j       halt
     
     # Initialize square root computation (binary search)
     addi    sp, x0, 0              # sp = current guess = 0
@@ -72,7 +77,7 @@ sqrt_done:
     addi    t2, x0, 10             # constant 10 for division
     addi    s0, x0, 0              # clear packed BCD accumulator
     addi    t6, x0, 8              # loop counter (8 digits)
-    addi    a2, x0, 28             # bit shift position (start at 28 for rightmost)
+    addi    a2, x0, 0             # bit shift position (start at 28 for rightmost)
     
 bcd_loop:
     # Extract one digit: digit = value % 10, value = value / 10
@@ -85,13 +90,13 @@ bcd_loop:
     
     # Setup for next iteration
     addi    t0, t4, 0              # move quotient to t0
-    addi    a2, a2, -4             # decrease shift by 4 (next digit position)
+    addi    a2, a2, 4             # decrease shift by 4 (next digit position)
     addi    t6, t6, -1             # decrement counter
     bnez    t6, bcd_loop           # loop if more digits remain
     
     # Pipeline bubbles to ensure completion
-    addi    x0, x0, 0              # NOP
-    addi    x0, x0, 0              # NOP
+    # addi    x0, x0, 0              # NOP
+    # addi    x0, x0, 0              # NOP
     
     # Write packed BCD to io2 (HEX displays)
     csrrw   x0, 0xf02, s0
