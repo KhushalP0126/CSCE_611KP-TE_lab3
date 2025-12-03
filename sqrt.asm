@@ -1,23 +1,30 @@
 .text
     .globl _start
-# Square root with binary search, then convert to packed BCD for HEX displays.
-# Input: binary value from io0 (switches)
-# Output: square root in (8,5) fixed-point format displayed as 8-digit decimal
+
+# Square root with binary search, then convert to (8,5) decimal format
 _start:
     # Read input from switches
-    csrrw   a0, 0xf00, x0          # a0 = input value from switches (io0)
+    csrrw   a0, 0xf00, x3          # a0 = input value from switches (io0)
+    
+    # Convert input to Q18.14 fixed-point format
+    slli    a0, a0, 14             # a0 = input << 14 (convert to Q18.14)
+    
+    #debug
+    addi    s0, a0, 0
+    csrrw   x0, 0xf02, s0
+    j       halt
     
     # Initialize square root computation (binary search)
     addi    sp, x0, 0              # sp = current guess = 0
     addi    gp, x0, 256            # gp = step size = 256
-    slli    gp, gp, 14             # gp = 256 << 14 (step in fixed-point Q18.14)
+    slli    gp, gp, 14             # gp = 256 << 14 (start with large step in Q18.14)
     
 sqrt_loop:
     # Square the current guess: (sp * sp) >> 14
     mul     tp, sp, sp             # tp = low 32 bits of sp^2
     mulhu   t1, sp, sp             # t1 = high 32 bits of sp^2
     srli    tp, tp, 14             # shift low part right by 14
-    slli    t1, t1, 18             # shift high part left by 18
+    slli    t1, t1, 18             # shift high part left by 18 (32-14=18)
     or      tp, tp, t1             # tp = (sp^2) >> 14 (Q18.14 result)
     
     # Check if we found exact match
@@ -38,48 +45,59 @@ sqrt_continue:
     bnez    gp, sqrt_loop          # continue if step > 0
     
 sqrt_done:
-    # sp now contains the square root in Q18.14 fixed-point format
-    # Convert to (8,5) format by shifting: Q18.14 -> decimal with 5 fractional digits
-    # We need to convert Q18.14 to integer representing decimal * 10^5
+    # sp now contains square root in Q18.14 format
+    # Convert to decimal: multiply by 100000, then divide by 16384 (2^14)
     
-    # Multiply by 100000 (10^5) to convert fractional part to integer
-    # sp is in Q18.14, so sp represents value * 2^14
-    # To get value * 10^5, compute: (sp * 100000) / 16384
+    # Move result to x1 for multiplication
+    add     x1, x0, sp             # x1 = sp (sqrt result in Q18.14)
     
-    lui     t1, 0x18               # load upper bits of 100000 (0x000186a0)
-    addi    t1, t1, 0x6a0          # t1 = 0x000186a0 = 100000
-    mul     t0, sp, t1             # t0 = sp * 100000 (low bits)
-    mulhu   t2, sp, t1             # t2 = sp * 100000 (high bits)
+    # Load constant 100000
+    li      a3, 100000             # Load the constant 100000
     
-    # Divide by 16384 (2^14) to adjust from Q18.14 to integer
-    srli    t0, t0, 14             # shift low part right by 14
-    slli    t2, t2, 18             # shift high part left by 18
-    or      t0, t2, t0             # t0 = (sp * 100000) / 16384
+    # Multiply x1 * 100000
+    mul     x2, x1, a3             # x2 = low 32 bits of x1 * 100000
+    mulhu   x1, x1, a3             # x1 = high 32 bits of x1 * 100000
     
-    # Now convert t0 (decimal result) to packed BCD
+    # Now shift to divide by 16384 (2^14)
+    slli    x1, x1, 18             # shift high part left (32-14=18)
+    srli    x2, x2, 14             # shift low part right by 14
+    
+    # Combine the results
+    or      x1, x1, x2             # x1 now has the final decimal result
+    
+    # Move to t0 for BCD conversion
+    add     t0, x0, x1             # t0 = decimal value to convert
+    
+    # Now convert t0 to packed BCD using loop
+    # t0 contains the decimal value to display
+    
+    # Setup for BCD conversion
     lui     t1, 0x1999a            # high bits of 0.1 (Q32.32)
     addi    t1, t1, -0x666         # adjust low bits -> 0x1999999a
-    addi    t2, x0, 10             # constant 10
+    addi    t2, x0, 10             # constant 10 for division
     addi    s0, x0, 0              # clear packed BCD accumulator
-    addi    t3, x0, 28             # current shift amount (HEX0 starts at bits 28-31)
-    addi    t6, x0, 8              # digits remaining
-
-loop_digits:
-    mulhu   t4, t0, t1             # quotient = value / 10
-    mul     t5, t4, t2             # quotient * 10
-    sub     t5, t0, t5             # digit = value - quotient*10
-    andi    t5, t5, 0xF            # mask to 4 bits
-    sll     t5, t5, t3             # place digit into packed BCD (HEX slot)
-    or      s0, s0, t5
-    addi    t0, t4, 0              # move quotient to t0 for next digit
-    addi    t3, t3, -4             # next HEX position (shift decreases by 4)
-    addi    t6, t6, -1
-    bnez    t6, loop_digits
+    addi    t6, x0, 8              # loop counter (8 digits)
+    addi    a2, x0, 28             # bit shift position (start at 28 for rightmost)
     
-    # Allow writeback of the last digit before reading s0 for CSR write
-    addi    x0, x0, 0              # NOP - pipeline bubble
-    addi    x0, x0, 0              # NOP - pipeline bubble
-
+bcd_loop:
+    # Extract one digit: digit = value % 10, value = value / 10
+    mulhu   t4, t0, t1             # t4 = quotient (value / 10)
+    mul     t5, t4, t2             # t5 = quotient * 10
+    sub     t5, t0, t5             # t5 = digit (value - quotient*10)
+    andi    t5, t5, 0xF            # mask to 4 bits
+    sll     t5, t5, a2             # shift digit to correct position
+    or      s0, s0, t5             # OR into packed BCD result
+    
+    # Setup for next iteration
+    addi    t0, t4, 0              # move quotient to t0
+    addi    a2, a2, -4             # decrease shift by 4 (next digit position)
+    addi    t6, t6, -1             # decrement counter
+    bnez    t6, bcd_loop           # loop if more digits remain
+    
+    # Pipeline bubbles to ensure completion
+    addi    x0, x0, 0              # NOP
+    addi    x0, x0, 0              # NOP
+    
     # Write packed BCD to io2 (HEX displays)
     csrrw   x0, 0xf02, s0
     
