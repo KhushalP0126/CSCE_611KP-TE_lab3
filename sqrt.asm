@@ -100,8 +100,5 @@ bcd_loop:
     
     # Write packed BCD to io2 (HEX displays)
     csrrw   x0, 0xf02, s0
-    
-    # Infinite loop to halt
-halt:
-    j       halt
+
 
