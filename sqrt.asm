@@ -1,7 +1,14 @@
 .text
     .globl _start
 
+    // Align code entry points on 64-bit boundaries and pad with nops so
+    // the dual-issue CPU always fetches valid even/odd pairs.
+    .macro ALIGN64
+        .balign 8, 0x00000013
+    .endm
+
 # Square root with binary search, then convert to (8,5) decimal format
+ALIGN64
 _start:
     # Read input from switches
     csrrw   a0, 0xf00, x0         # a0 = input value from switches (io0)
@@ -18,7 +25,8 @@ _start:
     addi    sp, x0, 0              # sp = current guess = 0
     addi    gp, x0, 256            # gp = step size = 256
     slli    gp, gp, 14             # gp = 256 << 14 (start with large step in Q18.14)
-    
+
+ALIGN64
 sqrt_loop:
     # Square the current guess: (sp * sp) >> 14
     mul     tp, sp, sp             # tp = low 32 bits of sp^2
@@ -32,18 +40,21 @@ sqrt_loop:
     
     # Adjust guess based on comparison
     bltu    tp, a0, sqrt_too_small
-    
+
+ALIGN64
 sqrt_too_large:
     sub     sp, sp, gp             # guess too large, decrease it
     j       sqrt_continue
-    
+
+ALIGN64
 sqrt_too_small:
     add     sp, sp, gp             # guess too small, increase it
     
 sqrt_continue:
     srli    gp, gp, 1              # halve the step size
     bnez    gp, sqrt_loop          # continue if step > 0
-    
+
+ALIGN64
 sqrt_done:
     # sp now contains square root in Q18.14 format
     # Convert to decimal: multiply by 100000, then divide by 16384 (2^14)
@@ -79,7 +90,8 @@ sqrt_done:
     addi    s0, x0, 0              # clear packed BCD accumulator
     addi    t6, x0, 8              # loop counter (8 digits)
     addi    a2, x0, 0             # bit shift position (start at 28 for rightmost)
-    
+
+ALIGN64
 bcd_loop:
     # Extract one digit: digit = value % 10, value = value / 10
     mulhu   t4, t0, t1             # t4 = quotient (value / 10)
@@ -100,4 +112,3 @@ bcd_loop:
 
     # Padding nop so instruction stream has an even count for 64-bit fetch pairs
     addi    x0, x0, 0
-
