@@ -59,8 +59,9 @@ sqrt_done:
     mulhu   x1, x1, a3             # x1 = high 32 bits of x1 * 100000
     
     # Now shift to divide by 16384 (2^14)
-    slli    x1, x1, 18             # shift high part left (32-14=18)
     srli    x2, x2, 14             # shift low part right by 14
+    slli    x1, x1, 18             # shift high part left (32-14=18)
+
     
     # Combine the results
     or      x1, x1, x2             # x1 now has the final decimal result
@@ -93,10 +94,6 @@ bcd_loop:
     addi    a2, a2, 4             # decrease shift by 4 (next digit position)
     addi    t6, t6, -1             # decrement counter
     bnez    t6, bcd_loop           # loop if more digits remain
-    
-    # Pipeline bubbles to ensure completion
-    addi    x0, x0, 0              # NOP
-    addi    x0, x0, 0              # NOP
     
     # Write packed BCD to io2 (HEX displays)
     csrrw   x0, 0xf02, s0

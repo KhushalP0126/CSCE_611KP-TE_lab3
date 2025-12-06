@@ -22,7 +22,7 @@ module simtop;
   // ---------------- Test parameters ----------------
   
   parameter logic [17:0] INPUT_HEX_VALUE  = 18'h3FFFF;  // 262143 decimal
-  parameter logic [31:0] EXPECTED_BCD_OUT = 32'h34126200; // Correct BCD
+  parameter logic [31:0] EXPECTED_BCD_OUT = 32'h51199902; // Correct BCD
   
   // Instantiate DUT (top) - ALL PORTS MAPPED
   top dut (
@@ -80,20 +80,20 @@ module simtop;
     $display("Releasing reset (KEY[0]=1). CPU starts execution.");
     
     // Wait for CPU to execute the assembled program.
-    #4000; // 4000 ns (~200 cycles @50MHz)
+    #8000; // 8000 ns (~400 cycles @50MHz)
     
     $display("--- Test End ---");
     $display("Final BCD Output (dut.cpu0.gpio_out) = 0x%08h", dut.cpu0.gpio_out);
-    
+
     // Decode the output for easier reading
-    $display("  HEX7 (ten-millions):     %h", dut.cpu0.gpio_out[3:0]);
-    $display("  HEX6 (millions):         %h", dut.cpu0.gpio_out[7:4]);
-    $display("  HEX5 (hundred-thousands): %h", dut.cpu0.gpio_out[11:8]);
-    $display("  HEX4 (ten-thousands):    %h", dut.cpu0.gpio_out[15:12]);
-    $display("  HEX3 (thousands):        %h", dut.cpu0.gpio_out[19:16]);
-    $display("  HEX2 (hundreds):         %h", dut.cpu0.gpio_out[23:20]);
-    $display("  HEX1 (tens):             %h", dut.cpu0.gpio_out[27:24]);
-    $display("  HEX0 (ones):             %h", dut.cpu0.gpio_out[31:28]);
+    $display("  HEX7 (ten-millions):     %h", dut.cpu0.gpio_out[31:28]);
+    $display("  HEX6 (millions):         %h", dut.cpu0.gpio_out[27:24]);
+    $display("  HEX5 (hundred-thousands): %h", dut.cpu0.gpio_out[23:20]);
+    $display("  HEX4 (ten-thousands):    %h", dut.cpu0.gpio_out[19:16]);
+    $display("  HEX3 (thousands):        %h", dut.cpu0.gpio_out[15:12]);
+    $display("  HEX2 (hundreds):         %h", dut.cpu0.gpio_out[11:8]);
+    $display("  HEX1 (tens):             %h", dut.cpu0.gpio_out[7:4]);
+    $display("  HEX0 (ones):             %h", dut.cpu0.gpio_out[3:0]);
     
     if (dut.cpu0.gpio_out == EXPECTED_BCD_OUT) begin
       $display("TEST PASSED: The BCD result 0x%08h is correct.", dut.cpu0.gpio_out);
@@ -101,6 +101,13 @@ module simtop;
       $display("TEST FAILED: Expected 0x%08h, Got: 0x%08h", EXPECTED_BCD_OUT, dut.cpu0.gpio_out);
     end
     
+    $display("\n----REGDUMP----");
+    for (int i = 0; i < 32; i++) begin
+      if (dut.cpu0.rf.mem[i] != 32'd0) begin
+        $display("  REGISTER x%02d = 0x%08h (%0d) \n", i, dut.cpu0.rf.mem[i], $signed(dut.cpu0.rf.mem[i]));
+      end
+    end 
+    $display("---------------");
     $finish;
   end
 endmodule
