@@ -98,4 +98,6 @@ bcd_loop:
     # Write packed BCD to io2 (HEX displays)
     csrrw   x0, 0xf02, s0
 
+    # Padding nop so instruction stream has an even count for 64-bit fetch pairs
+    addi    x0, x0, 0
 
