@@ -23,6 +23,56 @@ module simtop;
   
   parameter logic [17:0] INPUT_HEX_VALUE  = 18'h3FFFF;  // 262143 decimal
   parameter logic [31:0] EXPECTED_BCD_OUT = 32'h51199902; // Correct BCD
+
+  // ---------------- Dual-issue monitors ----------------
+  logic [11:0] pc_fetch_prev;
+  logic        pc_prev_valid;
+
+  // Monitor fetch PC stride matches issue count when no control redirect
+  always_ff @(posedge CLOCK_50) begin
+    if (KEY[0] == 1'b0) begin
+      pc_prev_valid <= 1'b0;
+    end else begin
+      if (pc_prev_valid && !dut.cpu0.flush_EX) begin
+        logic [11:0] expected_stride;
+        expected_stride = dut.cpu0.slot1_issue_F ? 12'd2 : 12'd1;
+        if (dut.cpu0.pc_F != pc_fetch_prev + expected_stride) begin
+          $error("PC stride mismatch: prev=%0d curr=%0d expected_stride=%0d (slot1_issue=%0b)",
+                 pc_fetch_prev, dut.cpu0.pc_F, expected_stride, dut.cpu0.slot1_issue_F);
+        end
+      end
+      pc_fetch_prev <= dut.cpu0.pc_F;
+      pc_prev_valid <= 1'b1;
+    end
+  end
+
+  // Verify fetched instruction pairs map correctly to 64-bit instmem entries
+  always_ff @(posedge CLOCK_50) begin
+    if (KEY[0] && !dut.cpu0.flush_EX) begin
+      logic [63:0] line_curr;
+      logic [63:0] line_next;
+      logic [31:0] expected_even;
+      logic [31:0] expected_odd;
+      line_curr = dut.cpu0.instmem[dut.cpu0.pc_F[11:1]];
+      line_next = dut.cpu0.instmem[dut.cpu0.pc_F[11:1] + 12'd1];
+      if (dut.cpu0.pc_F[0] == 1'b0) begin
+        expected_even = line_curr[31:0];
+        expected_odd  = line_curr[63:32];
+      end else begin
+        expected_even = line_curr[63:32];
+        expected_odd  = line_next[31:0];
+      end
+
+      if (dut.cpu0.instr0_F !== expected_even) begin
+        $error("Fetch mismatch even slot: PC=%0d expected=%h got=%h",
+               dut.cpu0.pc_F, expected_even, dut.cpu0.instr0_F);
+      end
+      if (dut.cpu0.slot1_issue_F && (dut.cpu0.instr1_F !== expected_odd)) begin
+        $error("Fetch mismatch odd slot: PC=%0d expected=%h got=%h",
+               dut.cpu0.pc_F + 12'd1, expected_odd, dut.cpu0.instr1_F);
+      end
+    end
+  end
   
   // Instantiate DUT (top) - ALL PORTS MAPPED
   top dut (
