@@ -18,7 +18,7 @@ module cpu (
 
     // instruction memory (4096 x 32)
     // 64-bit wide instruction memory (4096 32-bit words -> 2048 entries)
-    (* keep = 1 *) logic [63:0] instmem [0:2048];
+    (* ramstyle = "M9K", keep = 1 *) logic [63:0] instmem [0:2048];
     initial $readmemh("instmem.dat", instmem);
 
     // Program counter (word addressed)

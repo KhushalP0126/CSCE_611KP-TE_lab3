@@ -25,7 +25,7 @@ module regfile (
 );
 
 // REGS
-logic [31:0] mem[31:0];
+(* ramstyle = "M9K" *) logic [31:0] mem[31:0];
 
 always_ff @(posedge clk) begin
 	if (we && writeaddr != 5'd0) begin
